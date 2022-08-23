@@ -3017,7 +3017,8 @@ wasi_ssp_sock_addr_resolve(
         addr_info_size < *max_info_size ? addr_info_size : *max_info_size;
 
     for (size_t i = 0; i < actual_info_size; i++) {
-        addr_info[i].type = wamr_addr_info[i].is_tcp ? SOCK_STREAM : SOCK_DGRAM;
+        addr_info[i].type =
+            wamr_addr_info[i].is_tcp ? SOCKET_STREAM : SOCKET_DGRAM;
         if (wamr_addr_info[i].is_ipv4) {
             ipv4_addr_to_wasi_addr(*(uint32_t *)wamr_addr_info[i].addr,
                                    wamr_addr_info[i].port, &addr_info[i].addr);
