@@ -36,6 +36,16 @@ main(int argc, char *argv[])
     server_address.sin_port = htons(1234);
     server_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
+#ifdef __wasi__
+    printf("Set rcv timeout\n");
+    uint64_t recv_timeout = 5000000;
+    __wasi_sock_set_recv_timeout(socket_fd, &recv_timeout);
+
+    printf("Get rcv timeout\n");
+    __wasi_sock_get_recv_timeout(socket_fd, &recv_timeout);
+
+    printf("Timeout is %llu\n", recv_timeout);
+#endif
     printf("[Client] Connect socket\n");
     if (connect(socket_fd, (struct sockaddr *)&server_address,
                 sizeof(server_address))
@@ -63,6 +73,8 @@ main(int argc, char *argv[])
     while (1) {
         ret = recv(socket_fd, buffer + total_size, sizeof(buffer) - total_size,
                    0);
+
+        printf("recv return was %d\n", ret);
         if (ret <= 0)
             break;
         total_size += ret;

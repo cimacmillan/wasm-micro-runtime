@@ -1123,7 +1123,16 @@ static wasi_errno_t
 wasi_sock_get_recv_buf_size(wasm_exec_env_t exec_env, wasi_fd_t fd,
                             wasi_size_t *size)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_get_recv_buf_size(curfds, fd, size);
 }
 
 static wasi_errno_t
@@ -1145,20 +1154,47 @@ wasi_sock_get_recv_timeout(wasm_exec_env_t exec_env, wasi_fd_t fd,
 static wasi_errno_t
 wasi_sock_get_reuse_addr(wasm_exec_env_t exec_env, wasi_fd_t fd, uint8 *reuse)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_get_reuse_addr(curfds, fd, reuse);
 }
 
 static wasi_errno_t
 wasi_sock_get_reuse_port(wasm_exec_env_t exec_env, wasi_fd_t fd, uint8 *reuse)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_get_reuse_port(curfds, fd, reuse);
 }
 
 static wasi_errno_t
 wasi_sock_get_send_buf_size(wasm_exec_env_t exec_env, wasi_fd_t fd,
                             wasi_size_t *size)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_get_recv_buf_size(curfds, fd, size);
 }
 
 static wasi_errno_t
@@ -1213,7 +1249,16 @@ static wasi_errno_t
 wasi_sock_set_recv_buf_size(wasm_exec_env_t exec_env, wasi_fd_t fd,
                             wasi_size_t size)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_set_recv_buf_size(curfds, fd, size);
 }
 
 static wasi_errno_t
@@ -1235,20 +1280,47 @@ wasi_sock_set_recv_timeout(wasm_exec_env_t exec_env, wasi_fd_t fd,
 static wasi_errno_t
 wasi_sock_set_reuse_addr(wasm_exec_env_t exec_env, wasi_fd_t fd, uint8 reuse)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_set_reuse_addr(curfds, fd, reuse);
 }
 
 static wasi_errno_t
 wasi_sock_set_reuse_port(wasm_exec_env_t exec_env, wasi_fd_t fd, uint8 reuse)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_set_reuse_port(curfds, fd, reuse);
 }
 
 static wasi_errno_t
 wasi_sock_set_send_buf_size(wasm_exec_env_t exec_env, wasi_fd_t fd,
                             wasi_size_t size)
 {
-    return __WASI_ENOSYS;
+    wasm_module_inst_t module_inst = get_module_inst(exec_env);
+    wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+    struct fd_table *curfds = NULL;
+
+    if (!wasi_ctx)
+        return __WASI_EACCES;
+
+    curfds = wasi_ctx_get_curfds(module_inst, wasi_ctx);
+
+    return wasmtime_ssp_sock_set_send_buf_size(curfds, fd, size);
 }
 
 static wasi_errno_t

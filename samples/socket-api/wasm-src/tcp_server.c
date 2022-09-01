@@ -16,7 +16,7 @@
 #include <wasi_socket_ext.h>
 #endif
 
-#define WORKER_NUM 5
+#define WORKER_NUM 1
 
 void *
 run(void *arg)
@@ -29,11 +29,13 @@ run(void *arg)
            new_socket, (void *)(uintptr_t)pthread_self());
 
     for (i = 0; i < 5; i++) {
-        if (send(new_socket, message, strlen(message), 0) < 0) {
-            perror("Send failed");
-            break;
-        }
+        // if (send(new_socket, message, strlen(message), 0) < 0) {
+        //     perror("Send failed");
+        //     break;
+        // }
     }
+
+    sleep(10);
 
     printf("[Server] Shuting down the new connection #%u ..\n", new_socket);
     shutdown(new_socket, SHUT_RDWR);
@@ -63,6 +65,17 @@ main(int argc, char *argv[])
     addr.sin_port = htons(1234);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
+#ifdef __wasi__
+    printf("Set send timeout\n");
+    uint64_t send_timeout = 1230000;
+
+    __wasi_sock_set_send_timeout(socket_fd, &send_timeout);
+
+    printf("Get send timeout\n");
+    __wasi_sock_get_send_timeout(socket_fd, &send_timeout);
+
+    printf("Timeout is %llu\n", send_timeout);
+#endif
     printf("[Server] Bind socket\n");
     addrlen = sizeof(addr);
     if (bind(socket_fd, (struct sockaddr *)&addr, addrlen) < 0) {

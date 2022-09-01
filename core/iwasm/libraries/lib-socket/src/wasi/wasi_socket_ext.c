@@ -54,7 +54,7 @@ sockaddr_to_wasi_addr(const struct sockaddr *sock_addr, socklen_t addrlen,
     return ret;
 }
 
-static __wasi_errno_t
+__wasi_errno_t
 wasi_addr_to_sockaddr(const __wasi_addr_t *wasi_addr,
                       struct sockaddr *sock_addr, socklen_t *addrlen)
 {

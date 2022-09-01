@@ -8,6 +8,7 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 
 static void
 textual_addr_to_sockaddr(const char *textual, int port, struct sockaddr_in *out)
@@ -307,6 +308,257 @@ os_socket_convert_sockaddr(struct sockaddr *addr, uint8_t *buf, size_t buflen,
         }
         default:
             return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int os_socket_setbooloption(bh_socket_t socket, int level, int optname, uint8 enable) 
+{
+    if (setsockopt(socket, level, optname, &enable, sizeof(enable)) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int os_socket_getbooloption(bh_socket_t socket, int level, int optname, uint8 *enabled) 
+{
+    assert(enabled);
+
+    int enabled_size = sizeof(enabled);
+    if (getsockopt(socket, level, optname, enabled, &enabled_size) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_set_send_buf_size(bh_socket_t socket, uint64 bufsiz)
+{
+    if (setsockopt(socket, SOL_SOCKET, SO_SNDBUF, &bufsiz, sizeof(bufsiz))
+        != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_get_send_buf_size(bh_socket_t socket, uint64 *bufsiz)
+{
+    assert(bufsiz);
+
+    socklen_t bufsiz_len = sizeof(bufsiz);
+    if (getsockopt(socket, SOL_SOCKET, SO_SNDBUF, bufsiz, &bufsiz_len) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_set_recv_buf_size(bh_socket_t socket, uint64 bufsiz)
+{
+    if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &bufsiz, sizeof(bufsiz))
+        != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_get_recv_buf_size(bh_socket_t socket, uint64 *bufsiz)
+{
+    assert(bufsiz);
+
+    socklen_t bufsiz_len = sizeof(bufsiz);
+    if (getsockopt(socket, SOL_SOCKET, SO_RCVBUF, bufsiz, &bufsiz_len) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_set_keep_alive(bh_socket_t socket, uint8 enable)
+{
+    return os_socket_setbooloption(socket, SOL_SOCKET, SO_KEEPALIVE, enable);
+}
+
+int
+os_socket_get_keep_alive(bh_socket_t socket, uint8 *enabled)
+{
+    return os_socket_getbooloption(socket, SOL_SOCKET, SO_KEEPALIVE, enabled);
+}
+
+int
+os_socket_setsndtimeo(bh_socket_t socket, uint64 timeout_us) 
+{
+    struct timeval tv;
+    tv.tv_sec = timeout_us / 1000000UL;
+    tv.tv_usec = timeout_us % 1000000UL;
+    if (setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_getsndtimeo(bh_socket_t socket, uint64 *timeout_us) 
+{
+    struct timeval tv;
+    socklen_t tv_len = sizeof(tv);
+    if (getsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &tv, &tv_len) != 0) {
+        return BHT_ERROR;
+    }
+    *timeout_us = (tv.tv_sec * 1000000UL) + tv.tv_usec;
+    return BHT_OK;
+}
+
+int
+os_socket_setrecvtimeo(bh_socket_t socket, uint64 timeout_us) 
+{
+    struct timeval tv;
+    tv.tv_sec = timeout_us / 1000000UL;
+    tv.tv_usec = timeout_us % 1000000UL;
+    if (setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_getrecvtimeo(bh_socket_t socket, uint64 *timeout_us) 
+{
+    struct timeval tv;
+    socklen_t tv_len = sizeof(tv);
+    if (getsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, &tv_len) != 0) {
+        return BHT_ERROR;
+    }
+    *timeout_us = (tv.tv_sec * 1000000UL) + tv.tv_usec;
+    return BHT_OK;
+}
+
+int
+os_socket_set_reuse_addr(bh_socket_t socket, uint8 enable) 
+{
+    return os_socket_setbooloption(socket, SOL_SOCKET, SO_REUSEADDR, enable);
+}
+
+int
+os_socket_get_reuse_addr(bh_socket_t socket, uint8 *enabled) 
+{
+    return os_socket_getbooloption(socket, SOL_SOCKET, SO_REUSEADDR, enabled);
+}
+
+int
+os_socket_set_reuse_port(bh_socket_t socket, uint8 enable) 
+{
+    return os_socket_setbooloption(socket, SOL_SOCKET, SO_REUSEPORT, enable);
+}
+
+int
+os_socket_get_reuse_port(bh_socket_t socket, uint8 *enabled) 
+{
+    return os_socket_getbooloption(socket, SOL_SOCKET, SO_REUSEPORT, enabled);
+}
+
+int
+os_socket_set_tcp_keep_idle(bh_socket_t socket, uint32 time_s) 
+{
+    if (setsockopt(socket, IPPROTO_TCP, TCP_KEEPIDLE, &time_s, sizeof(time_s)) != 0) {
+        return BHT_ERROR;
+    }
+    
+    return BHT_OK;
+}
+
+int
+os_socket_get_tcp_keep_idle(bh_socket_t socket, uint32 *time_s) 
+{
+    assert(time_s);
+
+    socklen_t time_s_len = sizeof(time_s);
+    if (getsockopt(socket, IPPROTO_TCP, TCP_KEEPIDLE, time_s, &time_s_len) != 0) {
+        return BHT_ERROR;
+    }
+    
+    return BHT_OK;
+}
+
+int
+os_socket_set_tcp_keep_intvl(bh_socket_t socket, uint32 time_s) 
+{
+    if (setsockopt(socket, IPPROTO_TCP, TCP_KEEPINTVL, &time_s, sizeof(time_s)) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_get_tcp_keep_intvl(bh_socket_t socket, uint32 *time_s) 
+{
+    assert(time_s);
+
+    socklen_t time_s_len = sizeof(time_s);
+    if (getsockopt(socket, IPPROTO_TCP, TCP_KEEPINTVL, time_s, &time_s_len) != 0) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_set_tcp_fast_open_connect(bh_socket_t socket, uint8 enable) 
+{
+    return os_socket_setbooloption(socket, IPPROTO_TCP, TCP_FASTOPEN_CONNECT, enable);
+}
+
+int
+os_socket_get_tcp_fast_open_connect(bh_socket_t socket, uint8 *enabled) 
+{
+    return os_socket_getbooloption(socket, IPPROTO_TCP, TCP_FASTOPEN_CONNECT, enabled);
+}
+
+int
+os_socket_set_ip_multicast_loop(bh_socket_t socket, uint8 enable)
+{
+    return os_socket_setbooloption(socket, IPPROTO_IP, IP_MULTICAST_LOOP, enable);
+}
+
+int
+os_socket_get_ip_multicast_loop(bh_socket_t socket, uint8 *enabled)
+{
+    return os_socket_getbooloption(socket, IPPROTO_IP, IP_MULTICAST_LOOP, enabled);
+}
+
+int
+os_socket_ip_add_membership(bh_socket_t socket, bh_ip_mreq *mreq)
+{
+    assert(mreq);
+
+    if (setsockopt(socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, mreq,
+                   sizeof(bh_ip_mreq) != 0)) {
+        return BHT_ERROR;
+    }
+
+    return BHT_OK;
+}
+
+int
+os_socket_ip_drop_membership(bh_socket_t socket, bh_ip_mreq *mreq)
+{
+    assert(mreq);
+
+    if (setsockopt(socket, IPPROTO_IP, IP_DROP_MEMBERSHIP, mreq,
+                   sizeof(bh_ip_mreq) != 0)) {
+        return BHT_ERROR;
     }
 
     return BHT_OK;

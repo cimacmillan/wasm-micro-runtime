@@ -80,3 +80,5 @@ compile_with_clang(tcp_server.c)
 compile_with_clang(tcp_client.c)
 compile_with_clang(send_recv.c)
 compile_with_clang(socket_opts.c)
+compile_with_clang(socket_demo.c)
+
