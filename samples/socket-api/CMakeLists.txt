@@ -92,6 +92,7 @@ ExternalProject_Add(wasm-app
                       send_recv.wasm ${CMAKE_CURRENT_SOURCE_DIR}/build
                       socket_opts.wasm ${CMAKE_CURRENT_SOURCE_DIR}/build
                       socket_demo.wasm ${CMAKE_CURRENT_SOURCE_DIR}/build
+                      socket_demo_ipv6.wasm ${CMAKE_CURRENT_SOURCE_DIR}/build
 )
 
 add_executable(tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/wasm-src/tcp_server.c)

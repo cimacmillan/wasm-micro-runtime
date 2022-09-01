@@ -40,14 +40,20 @@ os_socket_create(bh_socket_t *sock, bool is_ipv4, bool is_tcp)
 {
     int af = is_ipv4 ? AF_INET : AF_INET6;
 
+    printf("os_socket_create is IPv4? %d\n", is_ipv4);
+
     if (!sock) {
         return BHT_ERROR;
     }
 
     if (is_tcp) {
+        printf("os_socket_create TCP\n");
+
         *sock = socket(af, SOCK_STREAM, IPPROTO_TCP);
     }
     else {
+        printf("os_socket_create DGRAM\n");
+
         *sock = socket(af, SOCK_DGRAM, 0);
     }
 
@@ -154,6 +160,8 @@ os_socket_connect(bh_socket_t socket, const char *addr, int port)
     if (!textual_addr_to_sockaddr(addr, port, (struct sockaddr *)&addr_in)) {
         return BHT_ERROR;
     }
+
+    printf("os_socket_connect family %d\n", addr_in.ss_family);
 
     ret = connect(socket, (struct sockaddr *)&addr_in, addr_len);
     if (ret == -1) {

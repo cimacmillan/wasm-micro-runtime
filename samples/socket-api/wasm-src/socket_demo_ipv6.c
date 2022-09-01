@@ -19,18 +19,25 @@ __wasi_addr_t gethostbyname(const char *name) {
    __wasi_addr_info_hints_t hints;
     hints.hints_enabled = 1;
     hints.type = SOCKET_STREAM;
-    hints.family = INET4;
+    hints.family = INET6;
     __wasi_addr_info_t info[4];
     __wasi_size_t max_info;
-    __wasi_errno_t error = __wasi_sock_addr_resolve(name, "", &hints, info, 4, &max_info);
+    __wasi_errno_t error = __wasi_sock_addr_resolve(name, "http", &hints, info, 4, &max_info);
     if (error) {
         printf("host address resolution failed %d\n", error);
     }
     printf("Address found for %s\n", name);
     for (int i = 0; i < 1; i++) {
-        printf("%u.%u.%u.%u\n", info[i].addr.addr.ip4.addr.n0,
-            info[i].addr.addr.ip4.addr.n1, info[i].addr.addr.ip4.addr.n2,
-            info[i].addr.addr.ip4.addr.n3);
+        printf("%u.%u.%u.%u.%u.%u.%u.%u\n", 
+            info[i].addr.addr.ip6.addr.n0,
+            info[i].addr.addr.ip6.addr.n1, 
+            info[i].addr.addr.ip6.addr.n2,
+            info[i].addr.addr.ip6.addr.n3,
+            info[i].addr.addr.ip6.addr.h0,
+            info[i].addr.addr.ip6.addr.h1, 
+            info[i].addr.addr.ip6.addr.h2,
+            info[i].addr.addr.ip6.addr.h3
+            );
     }
 
     return info[0].addr;
@@ -76,7 +83,7 @@ int main()
 
 
     /* create the socket */
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    sockfd = socket(AF_INET6, SOCK_STREAM, 0);
     if (sockfd < 0) error("ERROR opening socket");
 
     /* lookup the ip address */
@@ -85,12 +92,8 @@ int main()
     /* connect the socket */
     socklen_t addr_length;
     wasi_addr_to_sockaddr(&addr, &serv_addr, &addr_length);
-    printf("wasi addr kind %d\n", addr.kind);
-    printf("serv_addr.sin_family%d\n", serv_addr.sin_family);
-    printf("serv_addr.sin_port%d\n", serv_addr.sin_port);
-    printf("serv_addr.s_addr%d\n", serv_addr.sin_addr.s_addr);
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(portno);
+    // serv_addr.sin_family = AF_INET6;
+    // serv_addr.sin_port = htons(portno);
     if (connect(sockfd, &serv_addr, addr_length) != 0)
         error("ERROR connecting");
 
