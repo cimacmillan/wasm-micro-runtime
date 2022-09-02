@@ -1,0 +1,1 @@
+/workspace/wasm-micro-runtime/samples/socket-rust/target/wasm32-wasi/release/libhello_cargo.rlib: /workspace/wasm-micro-runtime/samples/socket-rust/src/lib.rs /workspace/wasm-micro-runtime/samples/socket-rust/src/wasi_poll.rs

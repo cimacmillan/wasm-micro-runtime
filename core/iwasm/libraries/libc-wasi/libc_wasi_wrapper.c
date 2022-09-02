@@ -1063,6 +1063,9 @@ wasi_sock_addr_resolve(wasm_exec_env_t exec_env, const char *host,
                        __wasi_size_t addr_info_size,
                        __wasi_size_t *max_info_size)
 {
+
+    printf("wasi_sock_addr_resolve(%s, %s)\n", host, service);
+
     wasm_module_inst_t module_inst = get_module_inst(exec_env);
     wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
     struct fd_table *curfds = NULL;

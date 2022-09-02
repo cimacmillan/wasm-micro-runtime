@@ -6,10 +6,12 @@ use std::os::raw::c_char;
 use std::str;
 mod wasi_poll;
 use crate::wasi_poll as poll;
+use std::ffi::{CString, CStr};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(C)]
 pub enum AddressFamily {
+    #[default]
     Inet4 = 0,
     Inet6 = 1,
 }
@@ -23,14 +25,15 @@ impl From<&SocketAddr> for AddressFamily {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(C)]
 pub enum SocketType {
+    #[default]
     Dgram = 0,
     Stream = 1,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default, Debug)]
 #[repr(C)]
 pub struct WasiAddressIPV4 {
     pub n0: u8,
@@ -39,18 +42,49 @@ pub struct WasiAddressIPV4 {
     pub n3: u8,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default, Debug)]
 #[repr(C)]
 pub struct WasiAddressIPV4Port {
     pub addr: WasiAddressIPV4,
     pub port: u16,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default, Debug)]
 #[repr(C)]
 pub struct WasiAddress {
     pub kind: AddressFamily,
     pub addr: WasiAddressIPV4Port,
+}
+
+// typedef struct __wasi_addr_ip6_t {
+//     uint16_t n0;
+//     uint16_t n1;
+//     uint16_t n2;
+//     uint16_t n3;
+//     uint16_t h0;
+//     uint16_t h1;
+//     uint16_t h2;
+//     uint16_t h3;
+// } __wasi_addr_ip6_t;
+
+// typedef struct __wasi_addr_ip6_port_t {
+//     __wasi_addr_ip6_t addr;
+//     __wasi_ip_port_t port; /* host byte order */
+// } __wasi_addr_ip6_port_t;
+
+#[derive(Copy, Clone, Default, Debug)]
+#[repr(C)]
+pub struct WasiAddressInfo {
+    pub addr: WasiAddress,
+    pub sock_type: SocketType
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+#[repr(C)]
+pub struct WasiAddressInfoHints {
+    pub sock_type: SocketType,
+    pub address_family: AddressFamily,
+    pub hints_enabled: u8
 }
 
 macro_rules! syscall {
@@ -337,6 +371,15 @@ extern "C" {
         flags: u16,
         send_len: *mut u32,
     ) -> u32;
+
+    pub fn sock_addr_resolve(
+        host: *const i8,
+        service: *const i8,
+        hints: *const WasiAddressInfoHints,
+        addr_info: *mut WasiAddressInfo,
+        addr_info_size: usize,
+        max_info_size: *mut usize
+    ) -> u32;
 }
 
 fn localhost() -> IpAddr {
@@ -344,22 +387,48 @@ fn localhost() -> IpAddr {
 }
 
 fn simple_http_client() -> io::Result<()> {
-    let mut stream = TcpStream::connect(&SocketAddr::new(localhost(), 9000))?;
+    unsafe {
+        let mut hints = WasiAddressInfoHints {
+            hints_enabled: 1,
+            sock_type: SocketType::Stream,
+            address_family: AddressFamily::Inet4
+        };
+        let mut max_info: usize = 0;    
+        let mut name = CString::new("google.com").expect("CString::new failed");
+        let mut service = CString::new("").expect("CString::new failed");;
 
-    stream.write_all("GET /test.html HTTP/1.1\r\n\r\n".as_bytes())?;
-    let mut buf = [0; 128];
+        let mut wasiaddrinfo_array: Vec<WasiAddressInfo> = vec![WasiAddressInfo::default(); 1];
 
-    loop {
-        let size = stream.read(&mut buf)?;
-        if size == 0 {
-            break;
+        let res = wasiaddrinfo_array.as_mut_ptr();
+
+        let error = sock_addr_resolve(name.as_ptr(), service.as_ptr(), &hints, res, 1, &mut max_info);
+        
+        println!("error: {}\n", error);
+        println!("addr: {:?}\n", wasiaddrinfo_array[0]);
+        println!("ma_info: {}\n", max_info);
+
+        let mut stream = TcpStream::connect(&SocketAddr::new(IpAddr::V4(Ipv4Addr::new(
+            wasiaddrinfo_array[0].addr.addr.addr.n0, 
+            wasiaddrinfo_array[0].addr.addr.addr.n1, 
+            wasiaddrinfo_array[0].addr.addr.addr.n2, 
+            wasiaddrinfo_array[0].addr.addr.addr.n3
+        )), 80))?;
+
+        stream.write_all("GET /test.html HTTP/1.1\r\n\r\n".as_bytes())?;
+        let mut buf = [0; 100000];
+        loop {
+            let size = stream.read(&mut buf)?;
+            if size == 0 {
+                break;
+            }
+            println!("response: \n{}", str::from_utf8(&buf).unwrap());
         }
-        println!("response: \n{}", str::from_utf8(&buf).unwrap());
+
+        stream.shutdown(Shutdown::Both)?;
+
+        Ok(())
+
     }
-
-    stream.shutdown(Shutdown::Both)?;
-
-    Ok(())
 }
 
 fn poll_http_client() -> io::Result<()> {
@@ -454,9 +523,7 @@ fn run_example(f: fn() -> io::Result<()>, name: &str) {
 
 #[no_mangle]
 pub extern "C" fn main(_argv: *const *const c_char, _argc: i32) -> i32 {
-    run_example(poll_http_client, "poll http client");
+    // run_example(poll_http_client, "poll http client");
     run_example(simple_http_client, "simple http client");
-    run_example(simple_tcp_echo_server, "simple tcp echo server");
-
     0
 }
