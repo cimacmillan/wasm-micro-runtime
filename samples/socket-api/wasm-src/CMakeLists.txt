@@ -82,4 +82,4 @@ compile_with_clang(send_recv.c)
 compile_with_clang(socket_opts.c)
 compile_with_clang(socket_demo.c)
 compile_with_clang(socket_demo_ipv6.c)
-
+compile_with_clang(addr_resolve.c)

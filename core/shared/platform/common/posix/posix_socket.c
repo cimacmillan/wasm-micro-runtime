@@ -40,20 +40,14 @@ os_socket_create(bh_socket_t *sock, bool is_ipv4, bool is_tcp)
 {
     int af = is_ipv4 ? AF_INET : AF_INET6;
 
-    printf("os_socket_create is IPv4? %d\n", is_ipv4);
-
     if (!sock) {
         return BHT_ERROR;
     }
 
     if (is_tcp) {
-        printf("os_socket_create TCP\n");
-
         *sock = socket(af, SOCK_STREAM, IPPROTO_TCP);
     }
     else {
-        printf("os_socket_create DGRAM\n");
-
         *sock = socket(af, SOCK_DGRAM, 0);
     }
 
@@ -161,8 +155,6 @@ os_socket_connect(bh_socket_t socket, const char *addr, int port)
         return BHT_ERROR;
     }
 
-    printf("os_socket_connect family %d\n", addr_in.ss_family);
-
     ret = connect(socket, (struct sockaddr *)&addr_in, addr_len);
     if (ret == -1) {
         return BHT_ERROR;
@@ -265,14 +257,15 @@ os_socket_addr_resolve(const char *host, const char *service,
 
     if (hints_enabled) {
         if (hint_is_ipv4) {
-            hints.ai_family = *hint_is_ipv4 ? PF_INET : PF_INET6;
+            hints.ai_family = *hint_is_ipv4 ? AF_INET : AF_INET6;
         }
         if (hint_is_tcp) {
             hints.ai_socktype = *hint_is_tcp ? SOCK_STREAM : SOCK_DGRAM;
         }
     }
 
-    ret = getaddrinfo(host, service, hints_enabled ? &hints : NULL, &result);
+    ret = getaddrinfo(host, strlen(service) == 0 ? NULL : service,
+                      hints_enabled ? &hints : NULL, &result);
     if (ret != BHT_OK) {
         errno = getaddrinfo_error_to_errno(ret);
         return BHT_ERROR;
