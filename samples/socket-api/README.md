@@ -95,6 +95,9 @@ The different examples that are demonstrated in `socket_opts`:
     * `./iwasm --addr-pool=127.0.0.1/15 --heap-size=10000000 socket_opts.wasm timeout_client`
 * `multicast_client` & `multicast_server` - Demonstrates how to recv multicast datagrams. 
     * `./iwasm --addr-pool=127.0.0.1/15 --heap-size=10000000 socket_opts.wasm multicast_client`
-    * `./socket_opts.wasm multicast_server` (Only the client is run with WAMR, as sending multicast datagrams is unsupported)
+    * `./socket_opts multicast_server` (Only the client is run with WAMR, as sending multicast datagrams is unsupported)
+* `multicast_client` & `multicast_server` - Demonstrates how to recv multicast datagrams. 
+    * `./iwasm --addr-pool=127.0.0.1/15 --heap-size=10000000 socket_opts.wasm multicast_client_inet6`
+    * `./socket_opts multicast_server_inet6` (Only the client is run with WAMR, as sending multicast datagrams is unsupported)
 
 Refer to [socket api document](../../doc/socket_api.md) for more details.

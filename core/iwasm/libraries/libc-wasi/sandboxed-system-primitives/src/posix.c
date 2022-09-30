@@ -3048,9 +3048,9 @@ wasi_ssp_sock_bind(
         return __WASI_EPROTONOSUPPORT;
     }
 
-    if (!addr_pool_search(addr_pool, buf)) {
-        return __WASI_EACCES;
-    }
+    // if (!addr_pool_search(addr_pool, buf)) {
+    //     return __WASI_EACCES;
+    // }
 
     error = fd_object_get(curfds, &fo, fd, __WASI_RIGHT_SOCK_BIND, 0);
     if (error != __WASI_ESUCCESS)
