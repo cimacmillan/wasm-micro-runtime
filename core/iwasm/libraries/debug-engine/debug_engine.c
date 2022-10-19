@@ -116,12 +116,18 @@ control_thread_routine(void *arg)
         return NULL;
     }
 
+    LOG_WARNING("cmmacmil connected to debugger");
+
     while (true) {
         os_mutex_lock(&control_thread->wait_lock);
+
+        // LOG_WARNING("cmmacmil locked thread");  
+
         if (!should_stop(control_thread)) {
             /* send thread stop reply */
             if (debug_inst->stopped_thread
                 && debug_inst->current_state == APP_RUNNING) {
+                LOG_WARNING("cmmacmil app is running 0");
                 uint32 status;
                 korp_tid tid;
 
@@ -132,6 +138,8 @@ control_thread_routine(void *arg)
 
                 if (debug_inst->stopped_thread->current_status->running_status
                     == STATUS_EXIT) {
+                                        LOG_WARNING("cmmacmil app is running 1");
+
                     /* If the thread exits, report "W00" if it's the last thread
                      * in the cluster, otherwise ignore this event */
                     status = 0;
@@ -140,6 +148,8 @@ control_thread_routine(void *arg)
                      * at this moment, so it is safe to access the
                      * exec_env_list.len without lock */
                     if (debug_inst->cluster->exec_env_list.len != 1) {
+                                    LOG_WARNING("cmmacmil app is running 2");
+
                         debug_inst->stopped_thread = NULL;
                         /* The exiting thread may wait for the signal */
                         os_cond_signal(&debug_inst->wait_cond);
@@ -147,6 +157,8 @@ control_thread_routine(void *arg)
                         continue;
                     }
                 }
+
+                LOG_WARNING("cmmacmil app is running 3");
 
                 wasm_debug_instance_set_cur_thread(
                     debug_inst, debug_inst->stopped_thread->handle);
@@ -156,14 +168,21 @@ control_thread_routine(void *arg)
                 debug_inst->current_state = APP_STOPPED;
                 debug_inst->stopped_thread = NULL;
 
+                
+                LOG_WARNING("cmmacmil app is running 4");
+
                 if (status == 0) {
+                                LOG_WARNING("cmmacmil app is running 5");
+
                     /* The exiting thread may wait for the signal */
                     os_cond_signal(&debug_inst->wait_cond);
                 }
             }
 
+            // LOG_WARNING("cmmacmil handling packet");
             /* Processing incoming requests */
             if (!wasm_gdbserver_handle_packet(control_thread->server)) {
+                LOG_WARNING("cmmacmil handle packet return stopped");
                 control_thread->status = STOPPED;
             }
         }
@@ -173,6 +192,8 @@ control_thread_routine(void *arg)
         }
         os_mutex_unlock(&control_thread->wait_lock);
     }
+
+    LOG_WARNING("cmmacmil ended");
 
     LOG_VERBOSE("control thread of debug object [%p] stopped\n", debug_inst);
     return NULL;

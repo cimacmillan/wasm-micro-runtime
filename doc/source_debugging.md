@@ -35,13 +35,34 @@ iwasm -g=127.0.0.1:1234 test.wasm
 # Use port = 0 to allow a random assigned debug port
 ```
 
-4. Build customized lldb (assume you have already cloned llvm)
+4. Build customized lldb (assume you have already cloned llvm). 
 ``` bash
 cd ${WAMR_ROOT}/core/deps/llvm
 git apply ../../../build-scripts/lldb-wasm.patch
 mkdir build-lldb && cd build-lldb
+
+# Build with cmake
+
 cmake -DCMAKE_BUILD_TYPE:STRING="Release" -DLLVM_ENABLE_PROJECTS="clang;lldb" -DLLVM_TARGETS_TO_BUILD:STRING="X86;WebAssembly" -DLLVM_ENABLE_LIBXML2:BOOL=ON ../llvm
 make -j $(nproc)
+
+cmake -E env LDFLAGS="-L/usr/local/opt/llvm/lib/c++ -Wl,-rpath,/usr/local/opt/llvm/lib/c++ -L/usr/local/opt/llvm/lib -L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" cmake -G Ninja -DCMAKE_BUILD_TYPE:STRING="Release" -DLLVM_ENABLE_PROJECTS="clang;libcxx;lldb" -DLLVM_TARGETS_TO_BUILD:STRING="X86;WebAssembly" -DLLVM_ENABLE_LIBXML2:BOOL=ON  -DCMAKE_C_COMPILER=/usr/local/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm/bin/clang++ -DCPPFLAGS="-I/usr/local/opt/llvm/include" -C ../standalone.cmake ../llvm
+ninja lldb
+
+cmake -DCMAKE_BUILD_TYPE:STRING="Release" -DLLVM_ENABLE_PROJECTS="clang;lldb" -DLLVM_TARGETS_TO_BUILD:STRING="X86;WebAssembly" -DLLVM_ENABLE_LIBXML2:BOOL=ON -DLLDB_INCLUDE_TESTS=OFF -C /Users/cmmacmil/Workplace/web-assembly/workplace/wasm-micro-runtime/core/deps/llvm/lldb/cmake/caches/Apple-lldb-Xcode.cmake ../llvm
+
+# macOS with Ninja, based on https://lldb.llvm.org/resources/build.html#common-configurations-on-macos
+
+cmake -G Ninja \
+        -C ../lldb/cmake/caches/Apple-lldb-macOS.cmake \
+        -DCMAKE_BUILD_TYPE:STRING="Release" \
+        -DLLVM_ENABLE_PROJECTS="clang;lldb" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
+        -DLLVM_TARGETS_TO_BUILD:STRING="X86;WebAssembly" \
+        -DLLVM_ENABLE_LIBXML2:BOOL=ON \
+        ../llvm
+
+DESTDIR=lldb-install ninja lldb
 ```
 
 5. Launch customized lldb and connect to iwasm

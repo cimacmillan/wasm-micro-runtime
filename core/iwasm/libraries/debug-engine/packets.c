@@ -47,7 +47,7 @@ write_packet_bytes(WASMGDBServer *gdbserver, const uint8 *data,
 void
 write_packet(WASMGDBServer *gdbserver, const char *data)
 {
-    LOG_VERBOSE("send replay:%s", data);
+    LOG_WARNING("send reply: %s", data);
     write_packet_bytes(gdbserver, (const uint8 *)data, strlen(data));
 }
 

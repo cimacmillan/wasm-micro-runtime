@@ -1,3 +1,15 @@
+diff --git a/lldb/include/lldb/Breakpoint/Breakpoint.h b/lldb/include/lldb/Breakpoint/Breakpoint.h
+index f2e2a0d22..426d1129b 100644
+--- a/lldb/include/lldb/Breakpoint/Breakpoint.h
++++ b/lldb/include/lldb/Breakpoint/Breakpoint.h
+@@ -9,6 +9,7 @@
+ #ifndef LLDB_BREAKPOINT_BREAKPOINT_H
+ #define LLDB_BREAKPOINT_BREAKPOINT_H
+ 
++#include <limits>
+ #include <memory>
+ #include <string>
+ #include <unordered_set>
 diff --git a/lldb/include/lldb/Core/Module.h b/lldb/include/lldb/Core/Module.h
 index dd7100c46..97d70daad 100644
 --- a/lldb/include/lldb/Core/Module.h
@@ -313,6 +325,27 @@ index 2ed083ec8..f4d500d19 100644
  /// Trace
  /// \{
  typedef llvm::Expected<lldb::TraceSP> (*TraceCreateInstanceForSessionFile)(
+diff --git a/lldb/source/Core/Debugger.cpp b/lldb/source/Core/Debugger.cpp
+index 17c3ba426..ed28b9972 100644
+--- a/lldb/source/Core/Debugger.cpp
++++ b/lldb/source/Core/Debugger.cpp
+@@ -1394,6 +1394,8 @@ void Debugger::HandleProcessEvent(const EventSP &event_sp) {
+ 
+     // Display running state changes first before any STDIO
+     if (got_state_changed && !state_is_stopped) {
++        error_stream_sp->Printf("cmmacmil debugger 2 process state changed\n");
++
+       Process::HandleProcessStateChangedEvent(event_sp, output_stream_sp.get(),
+                                               pop_process_io_handler);
+     }
+@@ -1434,6 +1436,7 @@ void Debugger::HandleProcessEvent(const EventSP &event_sp) {
+ 
+     // Now display any stopped state changes after any STDIO
+     if (got_state_changed && state_is_stopped) {
++        error_stream_sp->Printf("cmmacmil debugger process state changed\n");
+       Process::HandleProcessStateChangedEvent(event_sp, output_stream_sp.get(),
+                                               pop_process_io_handler);
+     }
 diff --git a/lldb/source/Core/Module.cpp b/lldb/source/Core/Module.cpp
 index 19c97be15..1647f93ec 100644
 --- a/lldb/source/Core/Module.cpp
@@ -5757,10 +5790,19 @@ index b660c310e..cd76421ce 100644
  
    return {};
 diff --git a/lldb/source/Target/Platform.cpp b/lldb/source/Target/Platform.cpp
-index a77ecddfb..e257f9350 100644
+index a77ecddfb..460526c45 100644
 --- a/lldb/source/Target/Platform.cpp
 +++ b/lldb/source/Target/Platform.cpp
-@@ -1970,6 +1970,12 @@ size_t Platform::GetSoftwareBreakpointTrapOpcode(Target &target,
+@@ -1858,6 +1858,8 @@ lldb::ProcessSP Platform::DoConnectProcess(llvm::StringRef connect_url,
+                                      nullptr);
+     process_sp->RestoreProcessEvents();
+     bool pop_process_io_handler = false;
++    printf("cmmacmil platform process state changed");
++
+     Process::HandleProcessStateChangedEvent(event_sp, stream,
+                                             pop_process_io_handler);
+   }
+@@ -1970,6 +1972,12 @@ size_t Platform::GetSoftwareBreakpointTrapOpcode(Target &target,
      trap_opcode_size = sizeof(g_i386_opcode);
    } break;
  
@@ -5774,10 +5816,20 @@ index a77ecddfb..e257f9350 100644
      return 0;
    }
 diff --git a/lldb/source/Target/Process.cpp b/lldb/source/Target/Process.cpp
-index 8ecc66b59..f14898791 100644
+index 8ecc66b59..d6e03c0b4 100644
 --- a/lldb/source/Target/Process.cpp
 +++ b/lldb/source/Target/Process.cpp
-@@ -1892,7 +1892,8 @@ Status Process::DisableSoftwareBreakpoint(BreakpointSite *bp_site) {
+@@ -662,6 +662,9 @@ StateType Process::WaitForProcessToStop(const Timeout<std::micro> &timeout,
+       *event_sp_ptr = event_sp;
+ 
+     bool pop_process_io_handler = (hijack_listener_sp.get() != nullptr);
++    
++    printf("cmmacmil processfile process state changed");
++
+     Process::HandleProcessStateChangedEvent(event_sp, stream,
+                                             pop_process_io_handler);
+ 
+@@ -1892,7 +1895,8 @@ Status Process::DisableSoftwareBreakpoint(BreakpointSite *bp_site) {
  // code
  //#define VERIFY_MEMORY_READS
  
@@ -5829,3 +5881,27 @@ index 4ec2e25c7..24c88fe9a 100644
    default:
      return std::make_shared<UnixSignals>();
    }
+diff --git a/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h b/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h
+index 4310ba9ce..297b33879 100644
+--- a/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h
++++ b/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h
+@@ -13,6 +13,7 @@
+ #ifndef LLVM_EXECUTIONENGINE_ORC_ORCRPCEXECUTORPROCESSCONTROL_H
+ #define LLVM_EXECUTIONENGINE_ORC_ORCRPCEXECUTORPROCESSCONTROL_H
+ 
++#include "llvm/ExecutionEngine/Orc/Core.h"
+ #include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
+ #include "llvm/ExecutionEngine/Orc/Shared/RPCUtils.h"
+ #include "llvm/ExecutionEngine/Orc/Shared/RawByteChannel.h"
+diff --git a/llvm/include/llvm/Support/MathExtras.h b/llvm/include/llvm/Support/MathExtras.h
+index 753b1998c..27370c62d 100644
+--- a/llvm/include/llvm/Support/MathExtras.h
++++ b/llvm/include/llvm/Support/MathExtras.h
+@@ -16,6 +16,7 @@
+ #include "llvm/Support/Compiler.h"
+ #include <cassert>
+ #include <climits>
++#include <limits>
+ #include <cmath>
+ #include <cstdint>
+ #include <cstring>

@@ -32,6 +32,7 @@ static const struct packet_handler_elem packet_handler_table[255] = {
     DEL_HANDLER('Z', handle_add_break),
     DEL_HANDLER('z', handle_remove_break),
     DEL_HANDLER('c', handle_continue_request),
+    DEL_HANDLER('C', handle_continue_request),
     DEL_HANDLER('k', handle_kill_request),
     DEL_HANDLER('_', handle____request),
 };
@@ -63,6 +64,9 @@ wasm_create_gdbserver(const char *host, int32 *port)
         LOG_ERROR("wasm gdb server error: create socket failed");
         goto fail;
     }
+
+    os_socket_set_reuse_addr(listen_fd, true);
+    os_socket_set_reuse_port(listen_fd, true);
 
     if (0 != os_socket_bind(listen_fd, host, port)) {
         LOG_ERROR("wasm gdb server error: socket bind failed");
@@ -148,13 +152,15 @@ process_packet(WASMGDBServer *server)
     request = inbuf[0];
 
     if (request == '\0') {
-        LOG_VERBOSE("ignore empty request");
+        LOG_WARNING("ignore empty request");
         return;
     }
 
     payload = (char *)&inbuf[1];
 
-    LOG_VERBOSE("receive request:%c %s\n", request, payload);
+
+
+    LOG_WARNING("receive request: %c %s\n", request, payload);
     handle_packet(server, request, payload);
 }
 
@@ -260,7 +266,9 @@ wasm_gdbserver_handle_packet(WASMGDBServer *server)
         return false;
     }
 
+
     n = os_socket_recv(server->socket_fd, buf, sizeof(buf));
+
 
     if (n == 0) {
         LOG_VERBOSE("Debugger disconnected");
@@ -278,6 +286,7 @@ wasm_gdbserver_handle_packet(WASMGDBServer *server)
         }
         else {
             LOG_ERROR("Socket receive error");
+
             return false;
         }
     }

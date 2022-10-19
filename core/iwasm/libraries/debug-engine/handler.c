@@ -461,12 +461,19 @@ handle_v_packet(WASMGDBServer *server, char *payload)
     name = payload;
     LOG_VERBOSE("%s:%s\n", __FUNCTION__, payload);
 
+    printf("Handle v packet\n");
+
     if (!strcmp("Cont?", name))
-        write_packet(server, "vCont;c;C;s;S;");
+        write_packet(server, "vCont;c;s;");
 
     if (!strcmp("Cont", name)) {
+        printf("Continue with args %s\n", args);
+
         if (args) {
-            if (args[0] == 's' || args[0] == 'c') {
+            if (args[0] == 's' || args[0] == 'c' || args[0] == 'C') {
+
+                printf("Continueing\n");
+
                 char *numstring = strchr(args, ':');
                 if (numstring) {
                     uint64 tid_number;
