@@ -105,7 +105,7 @@ jobs:
             -DLLVM_ENABLE_LIBXML2:BOOL=ON \
             -DLLDB_ENABLE_PYTHON:BOOL=OFF \
             -DLLDB_BUILD_FRAMEWORK:BOOL=OFF
-          cmake --build build --target lldb install --parallel $(nproc)
+          ninja -C build lldb
         working-directory: core/deps/llvm-project
 
       - name: pack a distribution
