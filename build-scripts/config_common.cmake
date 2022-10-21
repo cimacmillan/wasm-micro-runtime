@@ -121,7 +121,7 @@ if (NOT DEFINED WAMR_VERSION_MINOR)
 endif ()
 
 if (NOT DEFINED WAMR_VERSION_PATCH)
-  set (WAMR_VERSION_PATCH 1)
+  set (WAMR_VERSION_PATCH 2)
 endif ()
 
 configure_file(${WAMR_ROOT_DIR}/core/version.h.in ${WAMR_ROOT_DIR}/core/version.h @ONLY)
