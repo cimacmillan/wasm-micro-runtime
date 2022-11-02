@@ -4,36 +4,17 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { CheckIfDirectoryExist, DownloadFile, UnzipFile } from './directoryUtilities';
 
-interface LLDBSupportEntry {
-    destinationDir: string;
-    downloadUrl: string;
-}
-
 const LLDB_RESOURCE_DIR = "resource/debug";
-const LLDB_OS_SUPPORT: Partial<Record<NodeJS.Platform, LLDBSupportEntry>> = {
-    "linux": {
-        destinationDir: "linux",
-        downloadUrl: "https://github.com/cimacmillan/wasm-micro-runtime/releases/download/WAMR-1.1.1/wamr-lldb-1.1.1-universal-macos-latest.zip"
-    },
-    "darwin": {
-        destinationDir: "osx",
-        downloadUrl: "https://github.com/cimacmillan/wasm-micro-runtime/releases/download/WAMR-1.1.1/wamr-lldb-1.1.1-universal-macos-latest.zip"
-    }
+const LLDB_OS_DIR_MAP: Partial<Record<NodeJS.Platform, string>> = {
+    "linux": "linux",
+    "darwin": "osx"
+};
+const LLDB_OS_DOWNLOAD_URL_SUFFIX_MAP: Partial<Record<NodeJS.Platform, string>> = {
+    "linux": "x86_64-ubuntu-22.04",
+    "darwin": "universal-macos-latest"
 };
 
-const WamrLLDBNotSupportedError = () => new Error("WAMR LLDB is not supported on this platform");
-
-export function isLLDBInstalled(context: vscode.ExtensionContext): boolean {
-    const extensionPath = context.extensionPath;
-    const lldbOSEntry = LLDB_OS_SUPPORT[os.platform()]
-    if (!lldbOSEntry) {
-        throw WamrLLDBNotSupportedError();
-    }
-
-    const lldbBinaryPath = path.join(extensionPath, LLDB_RESOURCE_DIR, lldbOSEntry.destinationDir, "bin/lldb");
-
-    return CheckIfDirectoryExist(lldbBinaryPath);
-}
+const WamrLLDBNotSupportedError = new Error("WAMR LLDB is not supported on this platform");
 
 function getLLDBUnzipFilePath(destinationFolder: string, filename: string) {
     const dirs = filename.split("/");
@@ -41,7 +22,30 @@ function getLLDBUnzipFilePath(destinationFolder: string, filename: string) {
         dirs.shift();
     }
 
-    return path.join(destinationFolder, dirs.join("/"));
+    return path.join(destinationFolder, ...dirs);
+}
+
+function getLLDBDownloadUrl(context: vscode.ExtensionContext): string {
+    const wamrVersion = require(path.join(context.extensionPath, "package.json")).version;
+    const lldbOsUrlSuffix = LLDB_OS_DOWNLOAD_URL_SUFFIX_MAP[os.platform()];
+
+    if (!lldbOsUrlSuffix) {
+        throw WamrLLDBNotSupportedError;
+    }
+
+    return `https://github.com/cimacmillan/wasm-micro-runtime/releases/download/WAMR-${wamrVersion}/wamr-lldb-${wamrVersion}-${lldbOsUrlSuffix}.zip`
+}
+
+export function isLLDBInstalled(context: vscode.ExtensionContext): boolean {
+    const extensionPath = context.extensionPath;
+    const lldbOSDir = LLDB_OS_DIR_MAP[os.platform()]
+    if (!lldbOSDir) {
+        throw WamrLLDBNotSupportedError;
+    }
+
+    const lldbBinaryPath = path.join(extensionPath, LLDB_RESOURCE_DIR, lldbOSDir, "bin", "lldb");
+
+    return CheckIfDirectoryExist(lldbBinaryPath);
 }
 
 export async function promptInstallLLDB(context: vscode.ExtensionContext) {
@@ -54,13 +58,13 @@ export async function promptInstallLLDB(context: vscode.ExtensionContext) {
         return;
     }
 
-    const lldbOSEntry = LLDB_OS_SUPPORT[os.platform()];
+    const downloadUrl = getLLDBDownloadUrl(context);
+    const destinationDir = LLDB_OS_DIR_MAP[os.platform()];
 
-    if (!lldbOSEntry) {
-        throw WamrLLDBNotSupportedError();
+    if (!downloadUrl || !destinationDir) {
+        throw WamrLLDBNotSupportedError;
     }
 
-    const { downloadUrl, destinationDir } = lldbOSEntry;
     const lldbDestinationFolder = path.join(extensionPath, LLDB_RESOURCE_DIR, destinationDir);
     const lldbZipPath = path.join(lldbDestinationFolder, "bundle.zip");
 
@@ -71,6 +75,7 @@ export async function promptInstallLLDB(context: vscode.ExtensionContext) {
     vscode.window.showInformationMessage(`LLDB downloaded to ${lldbZipPath}. Installing...`);
 
     const lldbFiles = await UnzipFile(lldbZipPath, filename => getLLDBUnzipFilePath(lldbDestinationFolder, filename));
+    // Allow execution of lldb
     lldbFiles.forEach(file => fs.chmodSync(file, "0775"));
 
     vscode.window.showInformationMessage(`LLDB installed at ${lldbDestinationFolder}`);
