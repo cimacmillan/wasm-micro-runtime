@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/socket.h>
 
 /*Be a part of <wasi/api.h>*/
 
@@ -116,6 +117,10 @@ typedef struct __wasi_addr_info_hints_t {
 #define SO_RCVTIMEO 20
 #define SO_SNDTIMEO 21
 
+#define PF_INET 1
+#define POLLPRI 1
+#define HAVE_SOCKET 1
+
 #define TCP_NODELAY 1
 #define TCP_KEEPIDLE 4
 #define TCP_KEEPINTVL 5
@@ -144,10 +149,21 @@ struct addrinfo {
     struct addrinfo *ai_next; /* Pointer to next in list.  */
 };
 
+      struct hostent {
+        char    *h_name;
+        char    **h_aliases;
+        int     h_addrtype;
+        int     h_length;
+        char    **h_addr_list;
+      };
+
 #ifndef __WASI_RIGHTS_SOCK_ACCEPT
 int
 accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 #endif
+
+int gethostbyname(void* hostname);
+
 
 int
 bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);

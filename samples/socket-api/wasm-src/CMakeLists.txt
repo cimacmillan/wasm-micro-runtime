@@ -4,6 +4,69 @@
 cmake_minimum_required(VERSION 2.8...3.18)
 project(socket_api_sample_wasm_app)
 
+message(CHECK_START "Detecting WASI-SDK at /opt/wasi-sdk")
+if(NOT (DEFINED WASI_SDK_DIR OR DEFINED CACHE{WASI_SDK_DIR}))
+  find_path(WASI_SDK_PARENT
+    wasi-sdk
+    PATHS /opt
+    NO_DEFAULT_PATH
+    NO_CMAKE_FIND_ROOT_PATH
+  )
+  if(WASI_SDK_PARENT)
+    set(WASI_SDK_DIR ${WASI_SDK_PARENT}/wasi-sdk)
+  endif()
+endif()
+if(WASI_SDK_DIR)
+  message(CHECK_PASS "found")
+else()
+  message(CHECK_FAIL "not found")
+endif()
+
+if(NOT EXISTS ${WASI_SDK_DIR})
+  message(FATAL_ERROR "Please install WASI-SDK under /opt/wasi-sdk")
+endif()
+
+message(CHECK_START "Detecting WASI_TOOLCHAIN_FILE at ${WASI_SDK_DIR}")
+find_file(WASI_TOOLCHAIN_FILE
+  wasi-sdk.cmake
+  PATHS "${WASI_SDK_DIR}/share/cmake"
+  NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH
+)
+if(WASI_TOOLCHAIN_FILE)
+  message(CHECK_PASS "found")
+else()
+  message(CHECK_FAIL "not found")
+endif()
+
+if(WASI_TOOLCHAIN_FILE-NOTFOUND)
+  message(FATAL_ERROR "Can not find wasi-sdk.cmake under ${WASI_SDK_DIR}")
+endif()
+
+message(CHECK_START "Detecting WASI_SYS_ROOT at ${WASI_SDK_DIR}")
+find_path(WASI_SYS_ROOT
+  wasi-sysroot
+  PATHS "${WASI_SDK_DIR}/share"
+  NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH
+)
+if(WASI_SYS_ROOT)
+  message(CHECK_PASS "found")
+  set(WASI_SYS_ROOT ${WASI_SYS_ROOT}/wasi-sysroot)
+else()
+  message(CHECK_FAIL "not found")
+endif()
+
+if(WASI_SYS_ROOT-NOTFOUND)
+  message(FATAL_ERROR "Can not find wasi-sysroot/ under ${WASI_SDK_DIR}")
+endif()
+
+message(STATUS "WASI_SDK_DIR is ${WASI_SDK_DIR}")
+message(STATUS "WASI_TOOLCHAIN_FILE is ${WASI_TOOLCHAIN_FILE}")
+message(STATUS "WASI_SYS_ROOT is ${WASI_SYS_ROOT}")
+
+
+include(CMakePrintHelpers)
 message(CHECK_START "Detecting WABT")
 if(NOT (DEFINED WABT_DIR OR DEFINED CACHE{WABT_DIR}))
   find_path(WABT_DIR
@@ -38,6 +101,7 @@ endif()
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../../core/iwasm/libraries/lib-socket/lib_socket_wasi.cmake)
+# include(${CMAKE_CURRENT_SOURCE_DIR}/../../../core/iwasm/libraries/lib-pthread/lib_pthread.cmake)
 
 #######################################
 ## Build curl
@@ -82,6 +146,9 @@ set(CURL_CMAKE_ARGS
         -DHAVE_POLL_FINE_EXITCODE=0
         -DCURL_CA_BUNDLE=none
         -DCURL_CA_PATH=none
+        -DWASI_SDK_PREFIX=${WASI_SDK_DIR}
+        -DCMAKE_TOOLCHAIN_FILE=${WASI_TOOLCHAIN_FILE}
+        -DCMAKE_SYSROOT=${WASI_SYS_ROOT}
         -DCMAKE_DEBUG_POSTFIX=
         ${PLATFORM_CURL_CMAKE_ARGS}
 )
@@ -93,6 +160,8 @@ set(CURL_INCLUDE ${CURL_INSTALL_DIR}/include)
 set(CURL_LIBRARY ${CURL_INSTALL_DIR}/lib/libcurl${CURL_LIB_SUFFIX})
 
 set(CURL_CMAKE_ARGS ${CURL_CMAKE_ARGS} -DWITHOUT_LIBIDN2=ON)
+
+add_definitions(-I${CMAKE_CURRENT_SOURCE_DIR}/../../../core/iwasm/libraries/lib-socket/inc/wasi_socket_ext.h)
 
 ExternalProject_Add(
         Libs_Curl
@@ -111,6 +180,13 @@ ExternalProject_Add(
 file(MAKE_DIRECTORY ${CURL_INCLUDE})
 
 set(CURL_INCLUDE_DIR ${CURL_INSTALL_DIR}/include)
+add_library(libcurltargettag OBJECT ${CURL_INSTALL_DIR}/lib/libcurl.a)
+set_target_properties(libcurltargettag PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE}
+                                         IMPORTED_LINK_LANGUAGES "C"
+                                         IMPORTED_LOCATION ${CURL_LIBRARY})
+set_target_properties(libcurltargettag PROPERTIES INTERFACE_COMPILE_DEFINITIONS CURL_STATICLIB)
+add_dependencies(libcurltargettag Libs_Curl)
+
 
 message("CURL_LIBRARY=${CURL_LIBRARY}")
 message("CURL_INCLUDE=${CURL_INCLUDE}")
@@ -132,7 +208,8 @@ function(COMPILE_WITH_CLANG SOURCE_FILE)
   include_directories(${CURL_INCLUDE_DIR})
   target_include_directories(${MAIN_TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
   target_compile_options(${MAIN_TARGET_NAME} INTERFACE -pthread)
-  target_link_libraries(${MAIN_TARGET_NAME} socket_wasi_ext ${CURL_LIBRARIES})
+  target_link_libraries(${MAIN_TARGET_NAME} socket_wasi_ext ${CURL_INSTALL_DIR}/lib/libcurl.a)
+
   target_link_options(${MAIN_TARGET_NAME} PRIVATE
     LINKER:--export=__heap_base
     LINKER:--export=__data_end
@@ -140,6 +217,8 @@ function(COMPILE_WITH_CLANG SOURCE_FILE)
     LINKER:--no-check-features
     LINKER:--allow-undefined
   )
+
+  message(STATUS "Linking ${CURL_INCLUDE_DIR} ${CURL_LIBRARIES}")
 
   if(EXISTS ${WASM_OBJDUMP})
     message(STATUS "Dumping ${WASM_MODULE}...")
