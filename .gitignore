@@ -26,6 +26,7 @@ build_out
 tests/wamr-test-suites/workspace
 
 !/test-tools/wamr-ide/VSCode-Extension/.vscode
+test-tools/wamr-ide/VSCode-Extension/resource/debug/darwin/
 
 samples/socket-api/wasm-src/inc/pthread.h
 

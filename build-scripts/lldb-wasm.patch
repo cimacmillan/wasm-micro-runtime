@@ -1,5 +1,18 @@
+diff --git a/lldb/include/lldb/API/SBTarget.h b/lldb/include/lldb/API/SBTarget.h
+index 5a6908f040b1..5454869e01da 100644
+--- a/lldb/include/lldb/API/SBTarget.h
++++ b/lldb/include/lldb/API/SBTarget.h
+@@ -834,6 +834,8 @@ public:
+ 
+   lldb::addr_t GetStackRedZoneSize();
+ 
++  uint32_t GetMaximumOpcodeByteSize() const;
++
+   bool IsLoaded(const lldb::SBModule &module) const;
+ 
+   lldb::SBLaunchInfo GetLaunchInfo() const;
 diff --git a/lldb/include/lldb/Breakpoint/Breakpoint.h b/lldb/include/lldb/Breakpoint/Breakpoint.h
-index f2e2a0d22..426d1129b 100644
+index f2e2a0d22784..426d1129bd10 100644
 --- a/lldb/include/lldb/Breakpoint/Breakpoint.h
 +++ b/lldb/include/lldb/Breakpoint/Breakpoint.h
 @@ -9,6 +9,7 @@
@@ -11,7 +24,7 @@ index f2e2a0d22..426d1129b 100644
  #include <string>
  #include <unordered_set>
 diff --git a/lldb/include/lldb/Core/Module.h b/lldb/include/lldb/Core/Module.h
-index dd7100c46..97d70daad 100644
+index dd7100c4616c..97d70daadbdc 100644
 --- a/lldb/include/lldb/Core/Module.h
 +++ b/lldb/include/lldb/Core/Module.h
 @@ -41,6 +41,7 @@
@@ -41,7 +54,7 @@ index dd7100c46..97d70daad 100644
    ///
    /// Tries to resolve \a vm_addr as a file address (if \a
 diff --git a/lldb/include/lldb/Core/PluginManager.h b/lldb/include/lldb/Core/PluginManager.h
-index be91929c6..8d876fc1f 100644
+index be91929c62e1..8d876fc1fa2f 100644
 --- a/lldb/include/lldb/Core/PluginManager.h
 +++ b/lldb/include/lldb/Core/PluginManager.h
 @@ -508,6 +508,17 @@ public:
@@ -64,7 +77,7 @@ index be91929c6..8d876fc1f 100644
  } // namespace lldb_private
 diff --git a/lldb/include/lldb/Expression/DWARFEvaluator.h b/lldb/include/lldb/Expression/DWARFEvaluator.h
 new file mode 100644
-index 000000000..6811cbeae
+index 000000000000..6811cbeae3d3
 --- /dev/null
 +++ b/lldb/include/lldb/Expression/DWARFEvaluator.h
 @@ -0,0 +1,110 @@
@@ -180,7 +193,7 @@ index 000000000..6811cbeae
 +#endif // LLDB_EXPRESSION_DWARFEVALUATOR_H
 diff --git a/lldb/include/lldb/Expression/DWARFEvaluatorFactory.h b/lldb/include/lldb/Expression/DWARFEvaluatorFactory.h
 new file mode 100644
-index 000000000..f3b496c58
+index 000000000000..f3b496c580e4
 --- /dev/null
 +++ b/lldb/include/lldb/Expression/DWARFEvaluatorFactory.h
 @@ -0,0 +1,56 @@
@@ -241,7 +254,7 @@ index 000000000..f3b496c58
 +
 +#endif // LLDB_EXPRESSION_DWARFEVALUATORFACTORY_H
 diff --git a/lldb/include/lldb/Expression/DWARFExpression.h b/lldb/include/lldb/Expression/DWARFExpression.h
-index 1490ac2d6..35c741d4e 100644
+index 1490ac2d614a..35c741d4e6ba 100644
 --- a/lldb/include/lldb/Expression/DWARFExpression.h
 +++ b/lldb/include/lldb/Expression/DWARFExpression.h
 @@ -120,6 +120,10 @@ public:
@@ -275,7 +288,7 @@ index 1490ac2d6..35c741d4e 100644
    GetLocationExpression(lldb::addr_t load_function_start,
                          lldb::addr_t addr) const;
 diff --git a/lldb/include/lldb/Target/Process.h b/lldb/include/lldb/Target/Process.h
-index aaa2470d2..c15f2db52 100644
+index aaa2470d2931..c15f2db52fbc 100644
 --- a/lldb/include/lldb/Target/Process.h
 +++ b/lldb/include/lldb/Target/Process.h
 @@ -1434,7 +1434,7 @@ public:
@@ -288,7 +301,7 @@ index aaa2470d2..c15f2db52 100644
    /// Read of memory from a process.
    ///
 diff --git a/lldb/include/lldb/Target/ProcessTrace.h b/lldb/include/lldb/Target/ProcessTrace.h
-index 7b9d6b13d..9525fc975 100644
+index 7b9d6b13dd6f..9525fc9750fd 100644
 --- a/lldb/include/lldb/Target/ProcessTrace.h
 +++ b/lldb/include/lldb/Target/ProcessTrace.h
 @@ -59,7 +59,7 @@ public:
@@ -301,7 +314,7 @@ index 7b9d6b13d..9525fc975 100644
    size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                        Status &error) override;
 diff --git a/lldb/include/lldb/lldb-forward.h b/lldb/include/lldb/lldb-forward.h
-index ad5298151..5a3c0b27a 100644
+index ad5298151e4a..5a3c0b27a738 100644
 --- a/lldb/include/lldb/lldb-forward.h
 +++ b/lldb/include/lldb/lldb-forward.h
 @@ -74,6 +74,7 @@ class Disassembler;
@@ -313,7 +326,7 @@ index ad5298151..5a3c0b27a 100644
  class EmulateInstruction;
  class Environment;
 diff --git a/lldb/include/lldb/lldb-private-interfaces.h b/lldb/include/lldb/lldb-private-interfaces.h
-index 2ed083ec8..f4d500d19 100644
+index 2ed083ec8ae9..f4d500d198e8 100644
 --- a/lldb/include/lldb/lldb-private-interfaces.h
 +++ b/lldb/include/lldb/lldb-private-interfaces.h
 @@ -113,6 +113,8 @@ typedef lldb::REPLSP (*REPLCreateInstance)(Status &error,
@@ -325,8 +338,29 @@ index 2ed083ec8..f4d500d19 100644
  /// Trace
  /// \{
  typedef llvm::Expected<lldb::TraceSP> (*TraceCreateInstanceForSessionFile)(
+diff --git a/lldb/source/API/SBTarget.cpp b/lldb/source/API/SBTarget.cpp
+index 6f0633288a2b..749ca37bb479 100644
+--- a/lldb/source/API/SBTarget.cpp
++++ b/lldb/source/API/SBTarget.cpp
+@@ -2102,6 +2102,16 @@ lldb::SBInstructionList SBTarget::ReadInstructions(lldb::SBAddress base_addr,
+   return LLDB_RECORD_RESULT(sb_instructions);
+ }
+ 
++uint32_t SBTarget::GetMaximumOpcodeByteSize() const {
++  LLDB_RECORD_METHOD_CONST_NO_ARGS(uint32_t, SBTarget, GetMaximumOpcodeByteSize);
++
++  TargetSP target_sp(GetSP());
++  if (target_sp) 
++    return target_sp->GetArchitecture().GetMaximumOpcodeByteSize();
++    
++  return 0;
++}
++
+ lldb::SBInstructionList SBTarget::GetInstructions(lldb::SBAddress base_addr,
+                                                   const void *buf,
+                                                   size_t size) {
 diff --git a/lldb/source/Core/Module.cpp b/lldb/source/Core/Module.cpp
-index 19c97be15..1647f93ec 100644
+index 19c97be15066..1647f93ec4f3 100644
 --- a/lldb/source/Core/Module.cpp
 +++ b/lldb/source/Core/Module.cpp
 @@ -16,6 +16,7 @@
@@ -348,7 +382,7 @@ index 19c97be15..1647f93ec 100644
 +  return m_dwarf_evaluator_factory.get();
 +}
 diff --git a/lldb/source/Core/PluginManager.cpp b/lldb/source/Core/PluginManager.cpp
-index fcaa868b0..59a404d4a 100644
+index fcaa868b083e..59a404d4a7e1 100644
 --- a/lldb/source/Core/PluginManager.cpp
 +++ b/lldb/source/Core/PluginManager.cpp
 @@ -1597,3 +1597,32 @@ bool PluginManager::CreateSettingForStructuredDataPlugin(
@@ -385,7 +419,7 @@ index fcaa868b0..59a404d4a 100644
 +  return GetDWARFEvaluatorFactoryInstances().GetCallbackAtIndex(idx);
 +}
 diff --git a/lldb/source/Core/Value.cpp b/lldb/source/Core/Value.cpp
-index fb57c0fed..f92d6a54d 100644
+index fb57c0fedf04..f92d6a54de94 100644
 --- a/lldb/source/Core/Value.cpp
 +++ b/lldb/source/Core/Value.cpp
 @@ -538,7 +538,7 @@ Status Value::GetValueAsData(ExecutionContext *exe_ctx, DataExtractor &data,
@@ -398,7 +432,7 @@ index fb57c0fed..f92d6a54d 100644
              error.SetErrorStringWithFormat(
                  "read memory from 0x%" PRIx64 " failed (%u of %u bytes read)",
 diff --git a/lldb/source/Core/ValueObject.cpp b/lldb/source/Core/ValueObject.cpp
-index 9c1ba99da..b15b214b2 100644
+index 9c1ba99da1d0..b15b214b2a2f 100644
 --- a/lldb/source/Core/ValueObject.cpp
 +++ b/lldb/source/Core/ValueObject.cpp
 @@ -735,7 +735,7 @@ size_t ValueObject::GetPointeeData(DataExtractor &data, uint32_t item_idx,
@@ -411,7 +445,7 @@ index 9c1ba99da..b15b214b2 100644
            data.SetData(data_sp);
            return bytes_read;
 diff --git a/lldb/source/Expression/CMakeLists.txt b/lldb/source/Expression/CMakeLists.txt
-index bf94361dd..4e76d547a 100644
+index bf94361dd6c1..4e76d547aeaf 100644
 --- a/lldb/source/Expression/CMakeLists.txt
 +++ b/lldb/source/Expression/CMakeLists.txt
 @@ -1,5 +1,7 @@
@@ -424,7 +458,7 @@ index bf94361dd..4e76d547a 100644
    ExpressionVariable.cpp
 diff --git a/lldb/source/Expression/DWARFEvaluator.cpp b/lldb/source/Expression/DWARFEvaluator.cpp
 new file mode 100644
-index 000000000..06107e136
+index 000000000000..06107e136197
 --- /dev/null
 +++ b/lldb/source/Expression/DWARFEvaluator.cpp
 @@ -0,0 +1,1952 @@
@@ -2382,7 +2416,7 @@ index 000000000..06107e136
 +}
 diff --git a/lldb/source/Expression/DWARFEvaluatorFactory.cpp b/lldb/source/Expression/DWARFEvaluatorFactory.cpp
 new file mode 100644
-index 000000000..c06126412
+index 000000000000..c0612641204a
 --- /dev/null
 +++ b/lldb/source/Expression/DWARFEvaluatorFactory.cpp
 @@ -0,0 +1,57 @@
@@ -2444,7 +2478,7 @@ index 000000000..c06126412
 +                                          object_address_ptr);
 +}
 diff --git a/lldb/source/Expression/DWARFExpression.cpp b/lldb/source/Expression/DWARFExpression.cpp
-index a10546c1d..4d13e4642 100644
+index a10546c1deae..4d13e4642af3 100644
 --- a/lldb/source/Expression/DWARFExpression.cpp
 +++ b/lldb/source/Expression/DWARFExpression.cpp
 @@ -15,6 +15,8 @@
@@ -4261,7 +4295,7 @@ index a10546c1d..4d13e4642 100644
  
  static DataExtractor ToDataExtractor(const llvm::DWARFLocationExpression &loc,
 diff --git a/lldb/source/Interpreter/CommandInterpreter.cpp b/lldb/source/Interpreter/CommandInterpreter.cpp
-index 00e9ccb76..2137a1ac8 100644
+index 00e9ccb762c3..2137a1ac8324 100644
 --- a/lldb/source/Interpreter/CommandInterpreter.cpp
 +++ b/lldb/source/Interpreter/CommandInterpreter.cpp
 @@ -759,6 +759,24 @@ void CommandInterpreter::LoadCommandDictionary() {
@@ -4290,7 +4324,7 @@ index 00e9ccb76..2137a1ac8 100644
        new CommandObjectRegexCommand(
            *this, "kdp-remote",
 diff --git a/lldb/source/Plugins/CMakeLists.txt b/lldb/source/Plugins/CMakeLists.txt
-index 9181a4e47..2be6ec365 100644
+index 9181a4e47675..2be6ec3657c0 100644
 --- a/lldb/source/Plugins/CMakeLists.txt
 +++ b/lldb/source/Plugins/CMakeLists.txt
 @@ -2,6 +2,7 @@ add_subdirectory(ABI)
@@ -4320,14 +4354,14 @@ index 9181a4e47..2be6ec365 100644
    endif()
 diff --git a/lldb/source/Plugins/DWARFEvaluator/CMakeLists.txt b/lldb/source/Plugins/DWARFEvaluator/CMakeLists.txt
 new file mode 100644
-index 000000000..73fad41e1
+index 000000000000..73fad41e1a72
 --- /dev/null
 +++ b/lldb/source/Plugins/DWARFEvaluator/CMakeLists.txt
 @@ -0,0 +1 @@
 +add_subdirectory(wasm)
 diff --git a/lldb/source/Plugins/DWARFEvaluator/wasm/CMakeLists.txt b/lldb/source/Plugins/DWARFEvaluator/wasm/CMakeLists.txt
 new file mode 100644
-index 000000000..e50b1bef7
+index 000000000000..e50b1bef7e69
 --- /dev/null
 +++ b/lldb/source/Plugins/DWARFEvaluator/wasm/CMakeLists.txt
 @@ -0,0 +1,10 @@
@@ -4343,7 +4377,7 @@ index 000000000..e50b1bef7
 +  )
 diff --git a/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluator.cpp b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluator.cpp
 new file mode 100644
-index 000000000..fdda1991d
+index 000000000000..fdda1991d19f
 --- /dev/null
 +++ b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluator.cpp
 @@ -0,0 +1,126 @@
@@ -4475,7 +4509,7 @@ index 000000000..fdda1991d
 +}
 diff --git a/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluator.h b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluator.h
 new file mode 100644
-index 000000000..a01159064
+index 000000000000..a01159064a39
 --- /dev/null
 +++ b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluator.h
 @@ -0,0 +1,47 @@
@@ -4528,7 +4562,7 @@ index 000000000..a01159064
 +#endif // LLDB_SOURCE_PLUGINS_DWARFEVALUATOR_WASM_WASMDWARFEVALUATOR_H
 diff --git a/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluatorFactory.cpp b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluatorFactory.cpp
 new file mode 100644
-index 000000000..d43e96a34
+index 000000000000..d43e96a34d37
 --- /dev/null
 +++ b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluatorFactory.cpp
 @@ -0,0 +1,64 @@
@@ -4598,7 +4632,7 @@ index 000000000..d43e96a34
 +}
 diff --git a/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluatorFactory.h b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluatorFactory.h
 new file mode 100644
-index 000000000..8a946592a
+index 000000000000..8a946592a09a
 --- /dev/null
 +++ b/lldb/source/Plugins/DWARFEvaluator/wasm/WasmDWARFEvaluatorFactory.h
 @@ -0,0 +1,55 @@
@@ -4657,8 +4691,21 @@ index 000000000..8a946592a
 +} // namespace lldb_private
 +
 +#endif // LLDB_SOURCE_PLUGINS_DWARFEVALUATOR_WASM_WASMDWARFEVALUATORFACTORY_H
+diff --git a/lldb/source/Plugins/Disassembler/LLVMC/DisassemblerLLVMC.cpp b/lldb/source/Plugins/Disassembler/LLVMC/DisassemblerLLVMC.cpp
+index 7cd505d0ed29..79984b079177 100644
+--- a/lldb/source/Plugins/Disassembler/LLVMC/DisassemblerLLVMC.cpp
++++ b/lldb/source/Plugins/Disassembler/LLVMC/DisassemblerLLVMC.cpp
+@@ -1228,7 +1228,7 @@ size_t DisassemblerLLVMC::DecodeInstructions(const Address &base_addr,
+     uint32_t inst_size = inst_sp->Decode(*this, data, data_cursor);
+ 
+     if (inst_size == 0)
+-      break;
++      inst_size = 1;
+ 
+     m_instruction_list.Append(inst_sp);
+     data_cursor += inst_size;
 diff --git a/lldb/source/Plugins/DynamicLoader/wasm-DYLD/DynamicLoaderWasmDYLD.cpp b/lldb/source/Plugins/DynamicLoader/wasm-DYLD/DynamicLoaderWasmDYLD.cpp
-index ae7e011ea..24ea75d19 100644
+index ae7e011eaa52..24ea75d1971c 100644
 --- a/lldb/source/Plugins/DynamicLoader/wasm-DYLD/DynamicLoaderWasmDYLD.cpp
 +++ b/lldb/source/Plugins/DynamicLoader/wasm-DYLD/DynamicLoaderWasmDYLD.cpp
 @@ -62,6 +62,15 @@ void DynamicLoaderWasmDYLD::DidAttach() {
@@ -4678,7 +4725,7 @@ index ae7e011ea..24ea75d19 100644
  
  ThreadPlanSP DynamicLoaderWasmDYLD::GetStepThroughTrampolinePlan(Thread &thread,
 diff --git a/lldb/source/Plugins/ObjectFile/wasm/ObjectFileWasm.cpp b/lldb/source/Plugins/ObjectFile/wasm/ObjectFileWasm.cpp
-index 5272da9ab..abc5523bf 100644
+index 5272da9ab33a..abc5523bfd70 100644
 --- a/lldb/source/Plugins/ObjectFile/wasm/ObjectFileWasm.cpp
 +++ b/lldb/source/Plugins/ObjectFile/wasm/ObjectFileWasm.cpp
 @@ -23,6 +23,7 @@
@@ -4718,7 +4765,7 @@ index 5272da9ab..abc5523bf 100644
      }
    }
 diff --git a/lldb/source/Plugins/Platform/CMakeLists.txt b/lldb/source/Plugins/Platform/CMakeLists.txt
-index 5f284e517..6084cbc93 100644
+index 5f284e517dca..6084cbc9378d 100644
 --- a/lldb/source/Plugins/Platform/CMakeLists.txt
 +++ b/lldb/source/Plugins/Platform/CMakeLists.txt
 @@ -15,3 +15,4 @@
@@ -4728,7 +4775,7 @@ index 5f284e517..6084cbc93 100644
 +add_subdirectory(wasm-remote)
 diff --git a/lldb/source/Plugins/Platform/wasm-remote/CMakeLists.txt b/lldb/source/Plugins/Platform/wasm-remote/CMakeLists.txt
 new file mode 100644
-index 000000000..4a65765a5
+index 000000000000..4a65765a5659
 --- /dev/null
 +++ b/lldb/source/Plugins/Platform/wasm-remote/CMakeLists.txt
 @@ -0,0 +1,10 @@
@@ -4744,7 +4791,7 @@ index 000000000..4a65765a5
 +  )
 diff --git a/lldb/source/Plugins/Platform/wasm-remote/PlatformRemoteWasmServer.cpp b/lldb/source/Plugins/Platform/wasm-remote/PlatformRemoteWasmServer.cpp
 new file mode 100644
-index 000000000..f26d11f00
+index 000000000000..f26d11f00e5c
 --- /dev/null
 +++ b/lldb/source/Plugins/Platform/wasm-remote/PlatformRemoteWasmServer.cpp
 @@ -0,0 +1,139 @@
@@ -4890,7 +4937,7 @@ index 000000000..f26d11f00
 \ No newline at end of file
 diff --git a/lldb/source/Plugins/Platform/wasm-remote/PlatformRemoteWasmServer.h b/lldb/source/Plugins/Platform/wasm-remote/PlatformRemoteWasmServer.h
 new file mode 100644
-index 000000000..f306a79d3
+index 000000000000..f306a79d3f4f
 --- /dev/null
 +++ b/lldb/source/Plugins/Platform/wasm-remote/PlatformRemoteWasmServer.h
 @@ -0,0 +1,37 @@
@@ -4933,7 +4980,7 @@ index 000000000..f306a79d3
 +#endif
 \ No newline at end of file
 diff --git a/lldb/source/Plugins/Plugins.def.in b/lldb/source/Plugins/Plugins.def.in
-index bf54598fb..b0bd7b996 100644
+index bf54598fb2f3..b0bd7b9965fe 100644
 --- a/lldb/source/Plugins/Plugins.def.in
 +++ b/lldb/source/Plugins/Plugins.def.in
 @@ -31,6 +31,7 @@
@@ -4945,7 +4992,7 @@ index bf54598fb..b0bd7b996 100644
  
  #undef LLDB_PLUGIN
 diff --git a/lldb/source/Plugins/Process/CMakeLists.txt b/lldb/source/Plugins/Process/CMakeLists.txt
-index bea5bac9e..7a0855e02 100644
+index bea5bac9eb21..7a0855e02ca2 100644
 --- a/lldb/source/Plugins/Process/CMakeLists.txt
 +++ b/lldb/source/Plugins/Process/CMakeLists.txt
 @@ -18,3 +18,4 @@ add_subdirectory(Utility)
@@ -4954,7 +5001,7 @@ index bea5bac9e..7a0855e02 100644
  add_subdirectory(minidump)
 +add_subdirectory(wasm)
 diff --git a/lldb/source/Plugins/Process/elf-core/ProcessElfCore.cpp b/lldb/source/Plugins/Process/elf-core/ProcessElfCore.cpp
-index 12bc7390c..707ab85e5 100644
+index 12bc7390c729..707ab85e5615 100644
 --- a/lldb/source/Plugins/Process/elf-core/ProcessElfCore.cpp
 +++ b/lldb/source/Plugins/Process/elf-core/ProcessElfCore.cpp
 @@ -285,7 +285,7 @@ bool ProcessElfCore::IsAlive() { return true; }
@@ -4967,7 +5014,7 @@ index 12bc7390c..707ab85e5 100644
    // in core files we have it all cached our our core file anyway.
    return DoReadMemory(addr, buf, size, error);
 diff --git a/lldb/source/Plugins/Process/elf-core/ProcessElfCore.h b/lldb/source/Plugins/Process/elf-core/ProcessElfCore.h
-index d8e3cc9ae..f0bf9c4d3 100644
+index d8e3cc9ae3e1..f0bf9c4d3b00 100644
 --- a/lldb/source/Plugins/Process/elf-core/ProcessElfCore.h
 +++ b/lldb/source/Plugins/Process/elf-core/ProcessElfCore.h
 @@ -84,7 +84,8 @@ public:
@@ -4981,7 +5028,7 @@ index d8e3cc9ae..f0bf9c4d3 100644
    size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                        lldb_private::Status &error) override;
 diff --git a/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.cpp b/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.cpp
-index 6914b3734..bb8a05604 100644
+index 6914b37348ea..bb8a056049f3 100644
 --- a/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.cpp
 +++ b/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.cpp
 @@ -334,6 +334,11 @@ ConstString ProcessGDBRemote::GetPluginName() { return GetPluginNameStatic(); }
@@ -5015,7 +5062,7 @@ index 6914b3734..bb8a05604 100644
        }
      }
 diff --git a/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.h b/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.h
-index fe04cdddd..e4a14c645 100644
+index fe04cdddd0f5..e4a14c64579a 100644
 --- a/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.h
 +++ b/lldb/source/Plugins/Process/gdb-remote/ProcessGDBRemote.h
 @@ -237,6 +237,8 @@ protected:
@@ -5028,7 +5075,7 @@ index fe04cdddd..e4a14c645 100644
    enum {
      eBroadcastBitAsyncContinue = (1 << 0),
 diff --git a/lldb/source/Plugins/Process/mach-core/ProcessMachCore.cpp b/lldb/source/Plugins/Process/mach-core/ProcessMachCore.cpp
-index 84548edb5..0ae6f7e4a 100644
+index 84548edb5caa..0ae6f7e4a177 100644
 --- a/lldb/source/Plugins/Process/mach-core/ProcessMachCore.cpp
 +++ b/lldb/source/Plugins/Process/mach-core/ProcessMachCore.cpp
 @@ -596,7 +596,7 @@ bool ProcessMachCore::WarnBeforeDetach() const { return false; }
@@ -5041,7 +5088,7 @@ index 84548edb5..0ae6f7e4a 100644
    // in core files we have it all cached our our core file anyway.
    return DoReadMemory(addr, buf, size, error);
 diff --git a/lldb/source/Plugins/Process/mach-core/ProcessMachCore.h b/lldb/source/Plugins/Process/mach-core/ProcessMachCore.h
-index db77e96f1..1c930896c 100644
+index db77e96f1072..1c930896c743 100644
 --- a/lldb/source/Plugins/Process/mach-core/ProcessMachCore.h
 +++ b/lldb/source/Plugins/Process/mach-core/ProcessMachCore.h
 @@ -65,7 +65,8 @@ public:
@@ -5055,7 +5102,7 @@ index db77e96f1..1c930896c 100644
    size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                        lldb_private::Status &error) override;
 diff --git a/lldb/source/Plugins/Process/minidump/ProcessMinidump.cpp b/lldb/source/Plugins/Process/minidump/ProcessMinidump.cpp
-index 385557422..d8bb21581 100644
+index 385557422758..d8bb21581086 100644
 --- a/lldb/source/Plugins/Process/minidump/ProcessMinidump.cpp
 +++ b/lldb/source/Plugins/Process/minidump/ProcessMinidump.cpp
 @@ -374,7 +374,7 @@ bool ProcessMinidump::IsAlive() { return true; }
@@ -5068,7 +5115,7 @@ index 385557422..d8bb21581 100644
    // we have it all cached in our dump file anyway.
    return DoReadMemory(addr, buf, size, error);
 diff --git a/lldb/source/Plugins/Process/minidump/ProcessMinidump.h b/lldb/source/Plugins/Process/minidump/ProcessMinidump.h
-index 27b0da004..e94ecab43 100644
+index 27b0da0047a5..e94ecab430c1 100644
 --- a/lldb/source/Plugins/Process/minidump/ProcessMinidump.h
 +++ b/lldb/source/Plugins/Process/minidump/ProcessMinidump.h
 @@ -69,8 +69,8 @@ public:
@@ -5084,7 +5131,7 @@ index 27b0da004..e94ecab43 100644
                        Status &error) override;
 diff --git a/lldb/source/Plugins/Process/wasm/CMakeLists.txt b/lldb/source/Plugins/Process/wasm/CMakeLists.txt
 new file mode 100644
-index 000000000..61efb933f
+index 000000000000..61efb933fa62
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/CMakeLists.txt
 @@ -0,0 +1,12 @@
@@ -5102,7 +5149,7 @@ index 000000000..61efb933f
 +  )
 diff --git a/lldb/source/Plugins/Process/wasm/ProcessWasm.cpp b/lldb/source/Plugins/Process/wasm/ProcessWasm.cpp
 new file mode 100644
-index 000000000..9c0fc7b7f
+index 000000000000..9c0fc7b7f270
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/ProcessWasm.cpp
 @@ -0,0 +1,261 @@
@@ -5369,7 +5416,7 @@ index 000000000..9c0fc7b7f
 +}
 diff --git a/lldb/source/Plugins/Process/wasm/ProcessWasm.h b/lldb/source/Plugins/Process/wasm/ProcessWasm.h
 new file mode 100644
-index 000000000..d3aece7a6
+index 000000000000..d3aece7a6554
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/ProcessWasm.h
 @@ -0,0 +1,128 @@
@@ -5503,7 +5550,7 @@ index 000000000..d3aece7a6
 +#endif // LLDB_SOURCE_PLUGINS_PROCESS_WASM_PROCESSWASM_H
 diff --git a/lldb/source/Plugins/Process/wasm/ThreadWasm.cpp b/lldb/source/Plugins/Process/wasm/ThreadWasm.cpp
 new file mode 100644
-index 000000000..fa02073e7
+index 000000000000..fa02073e7a52
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/ThreadWasm.cpp
 @@ -0,0 +1,35 @@
@@ -5544,7 +5591,7 @@ index 000000000..fa02073e7
 +}
 diff --git a/lldb/source/Plugins/Process/wasm/ThreadWasm.h b/lldb/source/Plugins/Process/wasm/ThreadWasm.h
 new file mode 100644
-index 000000000..0a33c07de
+index 000000000000..0a33c07de994
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/ThreadWasm.h
 @@ -0,0 +1,41 @@
@@ -5591,7 +5638,7 @@ index 000000000..0a33c07de
 +#endif // LLDB_SOURCE_PLUGINS_PROCESS_WASM_THREADWASM_H
 diff --git a/lldb/source/Plugins/Process/wasm/UnwindWasm.cpp b/lldb/source/Plugins/Process/wasm/UnwindWasm.cpp
 new file mode 100644
-index 000000000..1a195cb93
+index 000000000000..1a195cb9361a
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/UnwindWasm.cpp
 @@ -0,0 +1,74 @@
@@ -5672,7 +5719,7 @@ index 000000000..1a195cb93
 \ No newline at end of file
 diff --git a/lldb/source/Plugins/Process/wasm/UnwindWasm.h b/lldb/source/Plugins/Process/wasm/UnwindWasm.h
 new file mode 100644
-index 000000000..9bd1dac9a
+index 000000000000..9bd1dac9a98a
 --- /dev/null
 +++ b/lldb/source/Plugins/Process/wasm/UnwindWasm.h
 @@ -0,0 +1,55 @@
@@ -5732,7 +5779,7 @@ index 000000000..9bd1dac9a
 +
 +#endif // lldb_UnwindWasm_h_
 diff --git a/lldb/source/Plugins/SymbolFile/DWARF/SymbolFileDWARF.cpp b/lldb/source/Plugins/SymbolFile/DWARF/SymbolFileDWARF.cpp
-index ccaf31317..c3ef5aebd 100644
+index ccaf31317d75..c3ef5aebd46d 100644
 --- a/lldb/source/Plugins/SymbolFile/DWARF/SymbolFileDWARF.cpp
 +++ b/lldb/source/Plugins/SymbolFile/DWARF/SymbolFileDWARF.cpp
 @@ -3212,8 +3212,13 @@ VariableSP SymbolFileDWARF::ParseVariableDIE(const SymbolContext &sc,
@@ -5751,7 +5798,7 @@ index ccaf31317..c3ef5aebd 100644
      // DWARF doesn't specify if a DW_TAG_variable is a local, global
      // or static variable, so we have to do a little digging:
 diff --git a/lldb/source/Target/PathMappingList.cpp b/lldb/source/Target/PathMappingList.cpp
-index b660c310e..cd76421ce 100644
+index b660c310ef31..cd76421cec18 100644
 --- a/lldb/source/Target/PathMappingList.cpp
 +++ b/lldb/source/Target/PathMappingList.cpp
 @@ -218,7 +218,12 @@ bool PathMappingList::ReverseRemapPath(const FileSpec &file, FileSpec &fixed) co
@@ -5769,7 +5816,7 @@ index b660c310e..cd76421ce 100644
  
    return {};
 diff --git a/lldb/source/Target/Platform.cpp b/lldb/source/Target/Platform.cpp
-index a77ecddfb..e257f9350 100644
+index a77ecddfbab6..e257f93508f6 100644
 --- a/lldb/source/Target/Platform.cpp
 +++ b/lldb/source/Target/Platform.cpp
 @@ -1970,6 +1970,12 @@ size_t Platform::GetSoftwareBreakpointTrapOpcode(Target &target,
@@ -5786,7 +5833,7 @@ index a77ecddfb..e257f9350 100644
      return 0;
    }
 diff --git a/lldb/source/Target/Process.cpp b/lldb/source/Target/Process.cpp
-index 8ecc66b59..f14898791 100644
+index 8ecc66b592ea..f148987915de 100644
 --- a/lldb/source/Target/Process.cpp
 +++ b/lldb/source/Target/Process.cpp
 @@ -1892,7 +1892,8 @@ Status Process::DisableSoftwareBreakpoint(BreakpointSite *bp_site) {
@@ -5800,7 +5847,7 @@ index 8ecc66b59..f14898791 100644
    if (!GetDisableMemoryCache()) {
  #if defined(VERIFY_MEMORY_READS)
 diff --git a/lldb/source/Target/ProcessTrace.cpp b/lldb/source/Target/ProcessTrace.cpp
-index c878a2ac4..ad5945b0a 100644
+index c878a2ac4eb9..ad5945b0ad1f 100644
 --- a/lldb/source/Target/ProcessTrace.cpp
 +++ b/lldb/source/Target/ProcessTrace.cpp
 @@ -88,7 +88,7 @@ void ProcessTrace::RefreshStateAfterStop() {}
@@ -5813,7 +5860,7 @@ index c878a2ac4..ad5945b0a 100644
    // we have it all cached in the trace files.
    return DoReadMemory(addr, buf, size, error);
 diff --git a/lldb/source/Target/ThreadPlanStepRange.cpp b/lldb/source/Target/ThreadPlanStepRange.cpp
-index 896e647bb..f76307016 100644
+index 896e647bbb52..f76307016102 100644
 --- a/lldb/source/Target/ThreadPlanStepRange.cpp
 +++ b/lldb/source/Target/ThreadPlanStepRange.cpp
 @@ -334,7 +334,10 @@ bool ThreadPlanStepRange::SetNextBranchBreakpoint() {
@@ -5829,7 +5876,7 @@ index 896e647bb..f76307016 100644
              instructions->GetInstructionAtIndex(last_index);
          size_t last_inst_size = last_inst->GetOpcode().GetByteSize();
 diff --git a/lldb/source/Target/UnixSignals.cpp b/lldb/source/Target/UnixSignals.cpp
-index 4ec2e25c7..24c88fe9a 100644
+index 4ec2e25c7e3b..24c88fe9ae4f 100644
 --- a/lldb/source/Target/UnixSignals.cpp
 +++ b/lldb/source/Target/UnixSignals.cpp
 @@ -46,6 +46,8 @@ lldb::UnixSignalsSP UnixSignals::Create(const ArchSpec &arch) {
@@ -5841,8 +5888,779 @@ index 4ec2e25c7..24c88fe9a 100644
    default:
      return std::make_shared<UnixSignals>();
    }
+diff --git a/lldb/tools/lldb-vscode/CMakeLists.txt b/lldb/tools/lldb-vscode/CMakeLists.txt
+index 41c1f10834e1..9d8dc5226004 100644
+--- a/lldb/tools/lldb-vscode/CMakeLists.txt
++++ b/lldb/tools/lldb-vscode/CMakeLists.txt
+@@ -26,6 +26,7 @@ add_public_tablegen_target(LLDBVSCodeOptionsTableGen)
+ add_lldb_tool(lldb-vscode
+   lldb-vscode.cpp
+   BreakpointBase.cpp
++  DisassembledInstruction.cpp
+   ExceptionBreakpoint.cpp
+   FifoFiles.cpp
+   FunctionBreakpoint.cpp
+@@ -36,6 +37,7 @@ add_lldb_tool(lldb-vscode
+   ProgressEvent.cpp
+   RunInTerminal.cpp
+   SourceBreakpoint.cpp
++  Watchpoint.cpp
+   VSCode.cpp
+ 
+   LINK_LIBS
+diff --git a/lldb/tools/lldb-vscode/DisassembledInstruction.cpp b/lldb/tools/lldb-vscode/DisassembledInstruction.cpp
+new file mode 100644
+index 000000000000..8dd968d72871
+--- /dev/null
++++ b/lldb/tools/lldb-vscode/DisassembledInstruction.cpp
+@@ -0,0 +1,27 @@
++#include "DisassembledInstruction.h"
++
++#include "LLDBUtils.h"
++#include "VSCode.h"
++#include "lldb/API/SBInstruction.h"
++
++namespace lldb_vscode {
++
++DisassembledInstruction::DisassembledInstruction()
++    : m_address("0x0000000000000000"), m_instruction("   <invalid>") {}
++
++DisassembledInstruction::DisassembledInstruction(lldb::SBInstruction &inst) {
++  const auto inst_addr = inst.GetAddress().GetLoadAddress(g_vsc.target);
++  const char *m = inst.GetMnemonic(g_vsc.target);
++  const char *o = inst.GetOperands(g_vsc.target);
++  const char *c = inst.GetComment(g_vsc.target);
++
++  std::string line;
++  llvm::raw_string_ostream line_strm(line);
++  const auto comment_sep = (c == nullptr || std::string(c) == "") ? "" : "  ; ";
++  line_strm << llvm::formatv("{0,12} {1}{2}{3}", m, o, comment_sep, c);
++
++  m_address = addr_to_hex_string(inst_addr);
++  m_instruction = line_strm.str();
++}
++
++} // namespace lldb_vscode
+\ No newline at end of file
+diff --git a/lldb/tools/lldb-vscode/DisassembledInstruction.h b/lldb/tools/lldb-vscode/DisassembledInstruction.h
+new file mode 100644
+index 000000000000..ad7e3d4244a5
+--- /dev/null
++++ b/lldb/tools/lldb-vscode/DisassembledInstruction.h
+@@ -0,0 +1,19 @@
++#ifndef LLDB_TOOLS_LLDB_VSCODE_DISASSEMBLED_INSTRUCTION_H
++#define LLDB_TOOLS_LLDB_VSCODE_DISASSEMBLED_INSTRUCTION_H
++
++#include "VSCodeForward.h"
++#include <string>
++
++namespace lldb_vscode {
++
++struct DisassembledInstruction {
++  std::string m_address;
++  std::string m_instruction;
++
++  DisassembledInstruction();
++  DisassembledInstruction(lldb::SBInstruction &inst);
++};
++
++} // namespace lldb_vscode
++
++#endif // LLDB_TOOLS_LLDB_VSCODE_DISASSEMBLED_INSTRUCTION_H
+\ No newline at end of file
+diff --git a/lldb/tools/lldb-vscode/JSONUtils.cpp b/lldb/tools/lldb-vscode/JSONUtils.cpp
+index 0e6227f3b15d..c89d5c968a09 100644
+--- a/lldb/tools/lldb-vscode/JSONUtils.cpp
++++ b/lldb/tools/lldb-vscode/JSONUtils.cpp
+@@ -748,6 +748,9 @@ llvm::json::Value CreateStackFrame(lldb::SBFrame &frame) {
+     object.try_emplace("line", line);
+   }
+   object.try_emplace("column", line_entry.GetColumn());
++
++  auto pc = addr_to_hex_string(frame.GetPC());
++  object.try_emplace("instructionPointerReference", pc);
+   return llvm::json::Value(std::move(object));
+ }
+ 
+@@ -1033,6 +1036,14 @@ llvm::json::Value CreateCompileUnit(lldb::SBCompileUnit unit) {
+   return llvm::json::Value(std::move(object));
+ }
+ 
++llvm::json::Value
++CreateDisassembledInstruction(DisassembledInstruction instruction) {
++  llvm::json::Object object;
++  EmplaceSafeString(object, "address", instruction.m_address);
++  EmplaceSafeString(object, "instruction", instruction.m_instruction);
++  return llvm::json::Value(std::move(object));
++}
++
+ /// See
+ /// https://microsoft.github.io/debug-adapter-protocol/specification#Reverse_Requests_RunInTerminal
+ llvm::json::Object
+diff --git a/lldb/tools/lldb-vscode/JSONUtils.h b/lldb/tools/lldb-vscode/JSONUtils.h
+index bb81b8889593..46ef96c98955 100644
+--- a/lldb/tools/lldb-vscode/JSONUtils.h
++++ b/lldb/tools/lldb-vscode/JSONUtils.h
+@@ -348,6 +348,8 @@ llvm::json::Value CreateSource(lldb::SBFrame &frame, int64_t &disasm_line);
+ ///   "source" - source file information as a "Source" VSCode object
+ ///   "line" - the source file line number as an integer
+ ///   "column" - the source file column number as an integer
++///   "instructionPointerReference" - a memory reference for the current
++///                                   instruction pointer in this frame
+ ///
+ /// \param[in] frame
+ ///     The LLDB stack frame to use when populating out the "StackFrame"
+@@ -462,6 +464,24 @@ llvm::json::Value CreateVariable(lldb::SBValue v, int64_t variablesReference,
+                                  int64_t varID, bool format_hex,
+                                  bool is_name_duplicated = false);
+ 
++/// Create a "DisassembledInstruction" object for a LLDB disassembled
++/// instruction object.
++///
++/// This function will fill in the following keys in the returned
++/// object:
++///   "address" - the address of the instruction
++///   "instruction" - the text representing the instruction and its operands
++///
++/// \param[in] instruction
++///     The LLDB disassembled instruction to use when populating out the
++///     "DisassembledInstruction" object.
++///
++/// \return
++///     A "DisassembledInstruction" JSON object with that follows the formal
++///     JSON definition outlined by Microsoft.
++llvm::json::Value
++CreateDisassembledInstruction(DisassembledInstruction instruction);
++
+ llvm::json::Value CreateCompileUnit(lldb::SBCompileUnit unit);
+ 
+ /// Create a runInTerminal reverse request object
+diff --git a/lldb/tools/lldb-vscode/LLDBUtils.cpp b/lldb/tools/lldb-vscode/LLDBUtils.cpp
+index 621f4ec37c83..7c1e8065d34a 100644
+--- a/lldb/tools/lldb-vscode/LLDBUtils.cpp
++++ b/lldb/tools/lldb-vscode/LLDBUtils.cpp
+@@ -83,4 +83,12 @@ int64_t MakeVSCodeFrameID(lldb::SBFrame &frame) {
+                    frame.GetFrameID());
+ }
+ 
++std::string addr_to_hex_string(lldb::addr_t address) {
++  return "0x" + llvm::utohexstr(address, true);
++}
++
++lldb::addr_t hex_string_to_addr(llvm::Optional<llvm::StringRef> hex_address) {
++  return std::stoull(hex_address->data(), nullptr, 16);
++}
++
+ } // namespace lldb_vscode
+diff --git a/lldb/tools/lldb-vscode/LLDBUtils.h b/lldb/tools/lldb-vscode/LLDBUtils.h
+index 8867589b18a0..79b75712c00a 100644
+--- a/lldb/tools/lldb-vscode/LLDBUtils.h
++++ b/lldb/tools/lldb-vscode/LLDBUtils.h
+@@ -10,6 +10,7 @@
+ #define LLDB_TOOLS_LLDB_VSCODE_LLDBUTILS_H
+ 
+ #include "VSCodeForward.h"
++#include "lldb/lldb-types.h"
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/StringRef.h"
+ #include "llvm/Support/raw_ostream.h"
+@@ -106,6 +107,26 @@ uint32_t GetLLDBThreadIndexID(uint64_t dap_frame_id);
+ ///     The LLDB frame index ID.
+ uint32_t GetLLDBFrameID(uint64_t dap_frame_id);
+ 
++/// Given an address, convert it to its hexadecimal representation.
++///
++/// \param[in] address
++///     The address to convert.
++///
++/// \return
++///     The hexadecimal representation of the address.
++std::string addr_to_hex_string(lldb::addr_t address);
++
++/// Given an hexadecimal representation of an address, convert it to a number.
++///
++/// Reverse of `addr_to_hex_string()`.
++///
++/// \param[in] hex_address
++///     The hexadecimal address to convert.
++///
++/// \return
++///     The decimal representation of the hex address.
++lldb::addr_t hex_string_to_addr(llvm::Optional<llvm::StringRef> hex_address);
++
+ } // namespace lldb_vscode
+ 
+ #endif
+diff --git a/lldb/tools/lldb-vscode/VSCode.h b/lldb/tools/lldb-vscode/VSCode.h
+index 29796767c9df..b29acdeaa042 100644
+--- a/lldb/tools/lldb-vscode/VSCode.h
++++ b/lldb/tools/lldb-vscode/VSCode.h
+@@ -17,6 +17,7 @@
+ #include <map>
+ #include <set>
+ #include <thread>
++#include <unordered_map>
+ 
+ #include "llvm/ADT/DenseMap.h"
+ #include "llvm/ADT/DenseSet.h"
+@@ -46,6 +47,7 @@
+ #include "lldb/API/SBTarget.h"
+ #include "lldb/API/SBThread.h"
+ 
++#include "DisassembledInstruction.h"
+ #include "ExceptionBreakpoint.h"
+ #include "FunctionBreakpoint.h"
+ #include "IOStream.h"
+@@ -53,6 +55,7 @@
+ #include "RunInTerminal.h"
+ #include "SourceBreakpoint.h"
+ #include "SourceReference.h"
++#include "Watchpoint.h"
+ 
+ #define VARREF_LOCALS (int64_t)1
+ #define VARREF_GLOBALS (int64_t)2
+@@ -102,6 +105,7 @@ struct VSCode {
+   llvm::StringMap<SourceBreakpointMap> source_breakpoints;
+   FunctionBreakpointMap function_breakpoints;
+   std::vector<ExceptionBreakpoint> exception_breakpoints;
++  std::unordered_map<std::string, Watchpoint> watchpoints;
+   std::vector<std::string> init_commands;
+   std::vector<std::string> pre_run_commands;
+   std::vector<std::string> exit_commands;
+diff --git a/lldb/tools/lldb-vscode/VSCodeForward.h b/lldb/tools/lldb-vscode/VSCodeForward.h
+index 6be5a9635e7e..a94d050eae9f 100644
+--- a/lldb/tools/lldb-vscode/VSCodeForward.h
++++ b/lldb/tools/lldb-vscode/VSCodeForward.h
+@@ -15,6 +15,7 @@ struct ExceptionBreakpoint;
+ struct FunctionBreakpoint;
+ struct SourceBreakpoint;
+ struct SourceReference;
++struct DisassembledInstruction;
+ } // namespace lldb_vscode
+ 
+ namespace lldb {
+diff --git a/lldb/tools/lldb-vscode/Watchpoint.cpp b/lldb/tools/lldb-vscode/Watchpoint.cpp
+new file mode 100644
+index 000000000000..2677ac894c4c
+--- /dev/null
++++ b/lldb/tools/lldb-vscode/Watchpoint.cpp
+@@ -0,0 +1,46 @@
++//===-- Watchpoint.cpp ------------------------------------*- C++ -*-===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++#include "Watchpoint.h"
++#include "VSCode.h"
++
++namespace lldb_vscode {
++
++Watchpoint::Watchpoint(uint64_t addr, size_t size, bool enabled, bool read, bool write): addr(addr), size(size), enabled(enabled), read(read), write(write), watchpoint_active(false) {
++  this->sync();
++}
++
++void Watchpoint::set_enabled(bool enabled) {
++  this->enabled = enabled;
++  this->sync();
++}
++
++void Watchpoint::sync() {
++  if (this->watchpoint_active) {
++    g_vsc.target.DeleteWatchpoint(this->watchpoint.GetID());
++    this->watchpoint_active = false;
++  }
++
++  if (!this->enabled) {
++    return;
++  }
++
++  this->watchpoint = g_vsc.target.WatchAddress(
++    this->addr, 
++    this->size, 
++    this->read, 
++    this->write, 
++    this->error
++  );
++
++  if (this->error.Success()) {
++    this->watchpoint_active = true;
++  }
++}
++
++} // namespace lldb_vscode
+diff --git a/lldb/tools/lldb-vscode/Watchpoint.h b/lldb/tools/lldb-vscode/Watchpoint.h
+new file mode 100644
+index 000000000000..3553dbd5b206
+--- /dev/null
++++ b/lldb/tools/lldb-vscode/Watchpoint.h
+@@ -0,0 +1,34 @@
++//===-- Watchpoint.h --------------------------------------*- C++ -*-===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef LLDB_TOOLS_LLDB_VSCODE_WATCHPOINT_H
++#define LLDB_TOOLS_LLDB_VSCODE_WATCHPOINT_H
++
++#include "BreakpointBase.h"
++#include "llvm/ADT/StringRef.h"
++
++namespace lldb_vscode {
++
++struct Watchpoint {
++  uint64_t addr;
++  size_t size;
++  bool enabled;
++  bool read;
++  bool write;
++  bool watchpoint_active;
++  lldb::SBWatchpoint watchpoint;
++  lldb::SBError error;
++
++  Watchpoint(uint64_t addr, size_t size, bool enabled, bool read, bool write);
++  void set_enabled(bool enabled);
++  void sync();
++};
++
++} // namespace lldb_vscode
++
++#endif
+diff --git a/lldb/tools/lldb-vscode/lldb-vscode.cpp b/lldb/tools/lldb-vscode/lldb-vscode.cpp
+index 9ab13cf140c6..7e4e8a7a4a2b 100644
+--- a/lldb/tools/lldb-vscode/lldb-vscode.cpp
++++ b/lldb/tools/lldb-vscode/lldb-vscode.cpp
+@@ -42,6 +42,7 @@
+ #include <sstream>
+ #include <thread>
+ #include <vector>
++#include <unordered_set>
+ 
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/DenseMap.h"
+@@ -107,6 +108,8 @@ typedef void (*RequestCallback)(const llvm::json::Object &command);
+ 
+ enum LaunchMethod { Launch, Attach, AttachForSuspendedLaunch };
+ 
++lldb::SBFrame g_curr_frame;
++
+ SOCKET AcceptConnection(int portno) {
+   // Accept a socket connection from any host on "portno".
+   SOCKET newsockfd = -1;
+@@ -1511,6 +1514,10 @@ void request_initialize(const llvm::json::Object &request) {
+   body.try_emplace("supportsLoadedSourcesRequest", false);
+   // The debug adapter supports sending progress reporting events.
+   body.try_emplace("supportsProgressReporting", true);
++  // The debug adapter supports data breakpoints
++  body.try_emplace("supportsDataBreakpoints", true);
++
++  body.try_emplace("supportsDisassembleRequest", true);
+ 
+   response.try_emplace("body", std::move(body));
+   g_vsc.SendJSON(llvm::json::Value(std::move(response)));
+@@ -2086,6 +2093,357 @@ void request_setBreakpoints(const llvm::json::Object &request) {
+   g_vsc.SendJSON(llvm::json::Value(std::move(response)));
+ }
+ 
++std::vector<lldb::SBInstruction>
++_get_instructions_from_memory(lldb::addr_t start, uint64_t count,
++                              lldb::addr_t end) {
++  lldb::SBProcess process = g_vsc.target.GetProcess();
++
++  lldb::SBError error;
++  std::vector<uint8_t> buffer(count, 0);
++  const size_t bytes_read __attribute__((unused)) = process.ReadMemory(
++      start, static_cast<void *>(buffer.data()), count, error);
++  assert(bytes_read == count && error.Success() &&
++         "unable to read byte range from memory");
++
++  // If base_addr starts in the middle of an instruction,
++  // that first instruction will not be parsed correctly (negligible)
++  std::vector<lldb::SBInstruction> sb_instructions;
++  const auto base_addr = lldb::SBAddress(start, g_vsc.target);
++  lldb::SBInstructionList instructions =
++      g_vsc.target.GetInstructions(base_addr, buffer.data(), count);
++
++  for (size_t i = 0; i < instructions.GetSize(); i++) {
++    auto instr = instructions.GetInstructionAtIndex(i);
++    if (instr.GetAddress().GetLoadAddress(g_vsc.target) > end)
++      break;
++
++    sb_instructions.emplace_back(instr);
++  }
++  return sb_instructions;
++}
++
++std::pair<lldb::addr_t, lldb::addr_t> _get_frame_boundary() {
++  assert(g_curr_frame.IsValid());
++  auto function = g_curr_frame.GetFunction();
++
++  if (!function.IsValid())
++    return std::make_pair<>(LLDB_INVALID_ADDRESS, LLDB_INVALID_ADDRESS);
++
++  return std::make_pair<>(
++      function.GetStartAddress().GetLoadAddress(g_vsc.target),
++      function.GetEndAddress().GetLoadAddress(g_vsc.target));
++}
++
++auto _handle_disassemble_positive_offset(lldb::addr_t base_addr,
++                                         int64_t instruction_offset,
++                                         uint64_t instruction_count) {
++  llvm::json::Array response_instructions;
++
++  auto start_addr = lldb::SBAddress(base_addr, g_vsc.target);
++  lldb::SBInstructionList instructions = g_vsc.target.ReadInstructions(
++      start_addr, instruction_offset + instruction_count);
++
++  std::vector<DisassembledInstruction> dis_instructions;
++  const auto num_instrs_to_skip = static_cast<size_t>(instruction_offset);
++  for (size_t i = num_instrs_to_skip; i < instructions.GetSize(); ++i) {
++    lldb::SBInstruction instr = instructions.GetInstructionAtIndex(i);
++
++    auto disass_instr =
++        CreateDisassembledInstruction(DisassembledInstruction(instr));
++    response_instructions.emplace_back(std::move(disass_instr));
++  }
++
++  return response_instructions;
++}
++
++auto _handle_disassemble_negative_offset(
++    lldb::addr_t base_addr, int64_t instruction_offset,
++    uint64_t instruction_count,
++    llvm::Optional<llvm::StringRef> memory_reference) {
++  llvm::json::Array response_instructions;
++  const auto triple = g_vsc.target.GetTriple();
++
++  const auto bytes_per_instruction = 4;
++  const auto bytes_offset = -instruction_offset * bytes_per_instruction;
++  auto start_addr = base_addr - bytes_offset;
++  const auto disassemble_bytes = instruction_count * bytes_per_instruction;
++
++  // Get beginning of current stack frame to avoid reading outside of it
++  const auto frame_boundaries = _get_frame_boundary();
++  const auto low_pc = frame_boundaries.first;
++  const auto high_pc = frame_boundaries.second;
++  if (low_pc == LLDB_INVALID_ADDRESS)
++    return response_instructions;
++  if (start_addr < low_pc)
++    start_addr = low_pc;
++
++  auto sb_instructions =
++      _get_instructions_from_memory(start_addr, disassemble_bytes, high_pc);
++
++  // Find position of requested instruction
++  // in retrieved disassembled instructions
++  auto index = sb_instructions.size() + 1;
++  for (size_t i = 0; i < sb_instructions.size(); i++) {
++    if (sb_instructions[i].GetAddress().GetLoadAddress(g_vsc.target) ==
++        hex_string_to_addr(memory_reference)) {
++      index = i;
++      break;
++    }
++  }
++  if (index == sb_instructions.size() + 1) {
++    fprintf(stderr, "current line not found in disassembled instructions\n");
++    return response_instructions;
++  }
++
++  // Copy instructions into queue to easily manipulate them
++  std::deque<DisassembledInstruction> disass_instructions;
++  for (auto &instr : sb_instructions)
++    disass_instructions.emplace_back(DisassembledInstruction(instr));
++
++  // Make sure the address in the disassemble request is at the right position
++  const uint64_t expected_index = -instruction_offset;
++  if (index < expected_index) {
++    for (uint64_t i = 0; i < (expected_index - index); i++) {
++      DisassembledInstruction nop_instruction;
++      disass_instructions.emplace_front(nop_instruction);
++    }
++  } else if (index > expected_index) {
++    const auto num_instr_to_remove = index - expected_index;
++    disass_instructions.erase(disass_instructions.begin(),
++                              disass_instructions.begin() +
++                                  num_instr_to_remove);
++  }
++
++  // Truncate if too many instructions
++  if (disass_instructions.size() > instruction_count) {
++    disass_instructions.erase(disass_instructions.begin() + instruction_count,
++                              disass_instructions.end());
++  }
++
++  assert(disass_instructions.size() > expected_index &&
++         disass_instructions[expected_index].m_address ==
++             memory_reference.getValue());
++
++  for (auto &instr : disass_instructions)
++    response_instructions.emplace_back(CreateDisassembledInstruction(instr));
++  return response_instructions;
++}
++
++void request_disassemble(const llvm::json::Object &request) {
++  llvm::json::Object response;
++  lldb::SBError error;
++  FillResponse(request, response);
++  auto arguments = request.getObject("arguments");
++  const auto memory_reference = arguments->getString("memoryReference");
++  const auto instruction_offset = GetSigned(arguments, "instructionOffset", 0);
++  const auto instruction_count = GetUnsigned(arguments, "instructionCount", 0);
++  llvm::json::Array response_instructions;
++
++  auto base_addr = hex_string_to_addr(memory_reference);
++  base_addr += instruction_offset;
++
++  fprintf(stderr, "disassemble -> pc=%s off=%lld count=%llu\n",
++          memory_reference->data(), instruction_offset, instruction_count);
++
++  bool success = true;
++  if (hex_string_to_addr(memory_reference) == 0) {
++    success = false;
++    fprintf(stderr, "requested memory reference is nop\n");
++  } else {
++    response_instructions =
++        instruction_offset >= 0
++            ? _handle_disassemble_positive_offset(base_addr, instruction_offset,
++                                                  instruction_count)
++            : _handle_disassemble_negative_offset(base_addr, instruction_offset,
++                                                  instruction_count,
++                                                  memory_reference);
++  }
++
++  // Add padding if not enough instructions
++  if (response_instructions.size() < instruction_count) {
++    const auto padding_len = instruction_count - response_instructions.size();
++    for (size_t i = 0; i < padding_len; i++) {
++      const DisassembledInstruction nop_instruction;
++      auto disass_instr = CreateDisassembledInstruction(nop_instruction);
++      response_instructions.emplace_back(std::move(disass_instr));
++    }
++  }
++
++  assert((response_instructions.size() == instruction_count) &&
++         "should return exact number of requested instructions");
++
++  llvm::json::Object body;
++  body.try_emplace("instructions", std::move(response_instructions));
++  response.try_emplace("body", std::move(body));
++  response["success"] = llvm::json::Value(success);
++  g_vsc.SendJSON(llvm::json::Value(std::move(response)));
++}
++
++/**
++ * @brief Sets a data breakpoint from a setDataBreakpoints breakpoints argument
++ * 
++ * @param breakpoint JSON object of the breakpoint
++ * @return std::string unique id of the data breakpoint
++ */
++static std::string set_data_breakpoint(const llvm::json::Object *breakpoint) {
++  auto id = GetString(breakpoint, "id").str();
++
++  uint64_t v_address;
++  size_t v_size;
++  auto data_c_str = GetString(breakpoint, "dataId").data();  
++  sscanf(data_c_str, "%llu/%zu", &v_address, &v_size);
++  bool enabled = GetBoolean(breakpoint, "enabled", false);
++  bool read = false;
++  bool write = false;
++  auto access_type = GetString(breakpoint, "accessType").str(); 
++  if (access_type == "write") {
++    write = true;
++  } else if (access_type == "read") {
++    read = true;
++  } else if (access_type == "readWrite") {
++    write = true;
++    read = true;
++  }
++
++  if (g_vsc.watchpoints.find(id) != g_vsc.watchpoints.end()) {
++    auto existing_watchpoint = g_vsc.watchpoints.at(id);
++    if (existing_watchpoint.enabled != enabled) 
++      existing_watchpoint.set_enabled(enabled);
++    return id;
++  }
++
++  g_vsc.watchpoints.insert({ id, Watchpoint(v_address, v_size, enabled, read, write) });
++  return id;
++} 
++
++void request_setDataBreakpoints(const llvm::json::Object &request) {
++  llvm::json::Object response;
++  lldb::SBError error;
++  FillResponse(request, response);
++  auto arguments = request.getObject("arguments");
++  if (!arguments) return;
++
++  auto breakpoints = arguments->getArray("breakpoints");
++  if (!breakpoints) return;
++
++  std::unordered_set<std::string> breakpoint_ids;
++  for (const auto &breakpoint : *breakpoints) {
++    auto id = set_data_breakpoint(breakpoint.getAsObject());
++    breakpoint_ids.insert(id);
++  }
++
++  // If the record of watchpoints has entries that aren't present in the request, it means it's been deleted
++  std::vector<std::string> breakpoints_to_delete;
++  for (auto entry : g_vsc.watchpoints) {
++    auto id = entry.first;
++    if (breakpoint_ids.find(id) == breakpoint_ids.end()) {
++      entry.second.set_enabled(false);
++      breakpoints_to_delete.push_back(id);
++    }
++  }
++  for (auto entry : breakpoints_to_delete) {
++    g_vsc.watchpoints.erase(entry);
++  }
++}
++
++static lldb::SBValue get_variable(uint32_t variable_reference, std::string variable_name) {
++  bool is_duplicated_variable_name = variable_name.find(" @") != llvm::StringRef::npos;
++  lldb::SBValue variable;
++  if (VARREF_IS_SCOPE(variable_reference)) {
++    // variable_reference is one of our scopes, not an actual variable it is
++    // asking for a variable in locals or globals or registers
++    int64_t start_idx = 0;
++    int64_t end_idx = 0;
++    switch (variable_reference) {
++      case VARREF_LOCALS:
++        start_idx = 0;
++        end_idx = start_idx + g_vsc.num_locals;
++        break;
++      case VARREF_GLOBALS:
++        start_idx = g_vsc.num_locals;
++        end_idx = start_idx + g_vsc.num_globals;
++        break;
++      case VARREF_REGS:
++        start_idx = g_vsc.num_locals + g_vsc.num_globals;
++        end_idx = start_idx + g_vsc.num_regs;
++        break;
++      default:
++        break;
++    }
++
++    for (int64_t i = end_idx - 1; i >= start_idx; --i) {
++      lldb::SBValue curr_variable = g_vsc.variables.GetValueAtIndex(i);
++      std::string name = CreateUniqueVariableNameForDisplay(
++          curr_variable, is_duplicated_variable_name);
++      if (name == variable_name) {
++        variable = curr_variable;
++        break;
++      }
++    }
++  } else {
++    // This is not under the globals or locals scope, so there are no duplicated
++    // names.
++
++    // We have a named item within an actual variable so we need to find it
++    // withing the container variable by name.
++    const int64_t var_idx = VARREF_TO_VARIDX(variable_reference);
++    lldb::SBValue container = g_vsc.variables.GetValueAtIndex(var_idx);
++    variable = container.GetChildMemberWithName(variable_name.data());
++    if (!variable.IsValid()) {
++      if (variable_name.size() > 0 && variable_name[0] == '[') {
++        llvm::StringRef index_str(std::move(variable_name.substr(1)));
++        uint64_t index = 0;
++        if (!index_str.consumeInteger(0, index)) {
++          if (index_str == "]")
++            variable = container.GetChildAtIndex(index);
++        }
++      }
++    }
++  }
++
++  return variable;
++}
++
++void request_dataBreakpointInfo(const llvm::json::Object &request) {
++  llvm::json::Object response;
++  lldb::SBError error;
++  FillResponse(request, response);
++  auto arguments = request.getObject("arguments");
++  auto name = GetString(arguments, "name");  
++  auto variables_reference = arguments->getInteger("variablesReference");
++  lldb::SBValue variable = get_variable(variables_reference.getValue(), name.str());
++
++  if (!variable.IsValid()) {
++    std::stringstream failure;
++    failure << "variable '" << name.data() << "' is not a valid variable.";
++    g_vsc.SendOutput(OutputType::Console, failure.str());
++    return;
++  }
++
++  auto v_address = variable.GetLoadAddress();
++  auto v_size = variable.GetByteSize();
++
++  std::stringstream data;
++  data << v_address << "/" << v_size;
++
++  std::stringstream description;
++  description << name.data() << ": at address " << std::hex << "0x" << v_address << " with size " << std::dec << v_size;
++
++  llvm::json::Array access_types;
++  access_types.emplace_back("read");
++  access_types.emplace_back("write");
++  access_types.emplace_back("readWrite");
++
++  llvm::json::Object body;
++  body.try_emplace("accessTypes", std::move(access_types));
++  body.try_emplace("dataId", data.str());
++  body.try_emplace("description", description.str());
++  body.try_emplace("canPersist", false);
++  
++  response.try_emplace("body", std::move(body));
++  g_vsc.SendJSON(llvm::json::Value(std::move(response)));
++}
++
+ // "SetExceptionBreakpointsRequest": {
+ //   "allOf": [ { "$ref": "#/definitions/Request" }, {
+ //     "type": "object",
+@@ -2459,6 +2817,10 @@ void request_stackTrace(const llvm::json::Object &request) {
+       auto frame = thread.GetFrameAtIndex(i);
+       if (!frame.IsValid())
+         break;
++
++      if (i == 0) // Current stack frame
++        g_curr_frame = frame;
++
+       stackFrames.emplace_back(CreateStackFrame(frame));
+     }
+     const auto totalFrames = thread.GetNumFrames();
+@@ -2957,8 +3319,8 @@ void request_variables(const llvm::json::Object &request) {
+ 
+       if (!variable.IsValid())
+         break;
+-      variables.emplace_back(CreateVariable(variable, VARIDX_TO_VARREF(i), i,
+-                                            hex,
++      variables.emplace_back(CreateVariable(
++          variable, VARIDX_TO_VARREF(i), i, hex,
+           variable_name_counts[GetNonNullVariableName(variable)] > 1));
+     }
+   } else {
+@@ -3028,12 +3390,15 @@ void RegisterRequestCallbacks() {
+   g_vsc.RegisterRequestCallback("setFunctionBreakpoints",
+                                 request_setFunctionBreakpoints);
+   g_vsc.RegisterRequestCallback("setVariable", request_setVariable);
++  g_vsc.RegisterRequestCallback("setDataBreakpoints", request_setDataBreakpoints);
++  g_vsc.RegisterRequestCallback("dataBreakpointInfo", request_dataBreakpointInfo);
+   g_vsc.RegisterRequestCallback("source", request_source);
+   g_vsc.RegisterRequestCallback("stackTrace", request_stackTrace);
+   g_vsc.RegisterRequestCallback("stepIn", request_stepIn);
+   g_vsc.RegisterRequestCallback("stepOut", request_stepOut);
+   g_vsc.RegisterRequestCallback("threads", request_threads);
+   g_vsc.RegisterRequestCallback("variables", request_variables);
++  g_vsc.RegisterRequestCallback("disassemble", request_disassemble);
+   // Custom requests
+   g_vsc.RegisterRequestCallback("compileUnits", request_compileUnits);
+   g_vsc.RegisterRequestCallback("modules", request_modules);
 diff --git a/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h b/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h
-index 4310ba9ce..297b33879 100644
+index 4310ba9ce9e0..297b3387999d 100644
 --- a/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h
 +++ b/llvm/include/llvm/ExecutionEngine/Orc/OrcRPCExecutorProcessControl.h
 @@ -13,6 +13,7 @@
@@ -5854,7 +6672,7 @@ index 4310ba9ce..297b33879 100644
  #include "llvm/ExecutionEngine/Orc/Shared/RPCUtils.h"
  #include "llvm/ExecutionEngine/Orc/Shared/RawByteChannel.h"
 diff --git a/llvm/include/llvm/Support/MathExtras.h b/llvm/include/llvm/Support/MathExtras.h
-index 753b1998c..27370c62d 100644
+index 753b1998c40c..27370c62dd6e 100644
 --- a/llvm/include/llvm/Support/MathExtras.h
 +++ b/llvm/include/llvm/Support/MathExtras.h
 @@ -16,6 +16,7 @@

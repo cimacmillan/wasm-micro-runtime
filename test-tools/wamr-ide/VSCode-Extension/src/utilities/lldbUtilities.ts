@@ -48,7 +48,7 @@ function getLLDBDownloadUrl(context: vscode.ExtensionContext): string {
         throw WAMR_LLDB_NOT_SUPPORTED_ERROR;
     }
 
-    return `https://github.com/bytecodealliance/wasm-micro-runtime/releases/download/WAMR-${wamrVersion}/wamr-lldb-${wamrVersion}-${lldbOsUrlSuffix}.zip`;
+    return `https://github.com/cimacmillan/wasm-micro-runtime/releases/download/WAMR-${wamrVersion}/wamr-lldb-${wamrVersion}-${lldbOsUrlSuffix}.zip`;
 }
 
 export function isLLDBInstalled(context: vscode.ExtensionContext): boolean {

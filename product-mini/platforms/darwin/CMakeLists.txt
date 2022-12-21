@@ -31,7 +31,7 @@ if (NOT DEFINED WAMR_BUILD_TARGET)
 endif ()
 
 if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
 set(CMAKE_CXX_STANDARD 14)
@@ -93,7 +93,7 @@ endif ()
 
 if (NOT DEFINED WAMR_BUILD_DEBUG_INTERP)
   # Disable Debug feature by default
-  set (WAMR_BUILD_DEBUG_INTERP 0)
+  set (WAMR_BUILD_DEBUG_INTERP 1)
 endif ()
 
 if (WAMR_BUILD_DEBUG_INTERP EQUAL 1)
