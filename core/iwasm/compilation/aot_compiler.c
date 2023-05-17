@@ -1240,6 +1240,8 @@ aot_compile_func(AOTCompContext *comp_ctx, uint32 func_index)
                     case WASM_OP_ATOMIC_FENCE:
                         /* Skip memory index */
                         frame_ip++;
+                        if (!aot_compiler_op_atomic_fence(comp_ctx, func_ctx))
+                            return false;
                         break;
                     case WASM_OP_ATOMIC_I32_LOAD:
                         bytes = 4;
@@ -2597,7 +2599,7 @@ fail:
 }
 
 static bool
-veriy_module(AOTCompContext *comp_ctx)
+verify_module(AOTCompContext *comp_ctx)
 {
     char *msg = NULL;
     bool ret;
@@ -2697,7 +2699,7 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
        the compilation process */
     if (!comp_ctx->is_jit_mode) {
         bh_print_time("Begin to verify LLVM module");
-        if (!veriy_module(comp_ctx)) {
+        if (!verify_module(comp_ctx)) {
             return false;
         }
     }

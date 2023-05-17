@@ -30,6 +30,8 @@ bh_static_assert(offsetof(WASMExecEnv, aux_stack_boundary)
 bh_static_assert(offsetof(WASMExecEnv, aux_stack_bottom)
                  == 7 * sizeof(uintptr_t));
 bh_static_assert(offsetof(WASMExecEnv, native_symbol) == 8 * sizeof(uintptr_t));
+bh_static_assert(offsetof(WASMExecEnv, native_stack_top_min)
+                 == 9 * sizeof(uintptr_t));
 
 bh_static_assert(offsetof(AOTModuleInstance, memories) == 1 * sizeof(uint64));
 bh_static_assert(offsetof(AOTModuleInstance, func_ptrs) == 5 * sizeof(uint64));
@@ -899,86 +901,194 @@ create_exports(AOTModuleInstance *module_inst, AOTModule *module,
     return create_export_funcs(module_inst, module, error_buf, error_buf_size);
 }
 
-static bool
-clear_wasi_proc_exit_exception(AOTModuleInstance *module_inst)
+static AOTFunctionInstance *
+lookup_post_instantiate_func(AOTModuleInstance *module_inst,
+                             const char *func_name)
 {
-#if WASM_ENABLE_LIBC_WASI != 0
-    const char *exception = aot_get_exception(module_inst);
-    if (exception && !strcmp(exception, "Exception: wasi proc exit")) {
-        /* The "wasi proc exit" exception is thrown by native lib to
-           let wasm app exit, which is a normal behavior, we clear
-           the exception here. */
-        aot_set_exception(module_inst, NULL);
-        return true;
-    }
-    return false;
-#else
-    return false;
-#endif
-}
+    AOTFunctionInstance *func;
+    AOTFuncType *func_type;
 
-static bool
-execute_post_inst_function(AOTModuleInstance *module_inst)
-{
-    AOTFunctionInstance *post_inst_func =
-        aot_lookup_function(module_inst, "__post_instantiate", "()");
-
-    if (!post_inst_func)
+    if (!(func = aot_lookup_function(module_inst, func_name, NULL)))
         /* Not found */
-        return true;
+        return NULL;
 
-    return aot_create_exec_env_and_call_function(module_inst, post_inst_func, 0,
-                                                 NULL);
+    func_type = func->u.func.func_type;
+    if (!(func_type->param_count == 0 && func_type->result_count == 0))
+        /* Not a valid function type, ignore it */
+        return NULL;
+
+    return func;
 }
 
 static bool
-execute_start_function(AOTModuleInstance *module_inst)
+execute_post_instantiate_functions(AOTModuleInstance *module_inst,
+                                   bool is_sub_inst, WASMExecEnv *exec_env_main)
 {
     AOTModule *module = (AOTModule *)module_inst->module;
-    WASMExecEnv *exec_env;
-    typedef void (*F)(WASMExecEnv *);
-    union {
-        F f;
-        void *v;
-    } u;
+    AOTFunctionInstance *initialize_func = NULL;
+    AOTFunctionInstance *post_inst_func = NULL;
+    AOTFunctionInstance *call_ctors_func = NULL;
+    WASMModuleInstanceCommon *module_inst_main = NULL;
+#ifdef OS_ENABLE_HW_BOUND_CHECK
+    WASMExecEnv *exec_env_tls = wasm_runtime_get_exec_env_tls();
+#endif
+    WASMExecEnv *exec_env = NULL, *exec_env_created = NULL;
+    bool ret = false;
 
-    if (!module->start_function)
-        return true;
-
-    if (!(exec_env =
-              wasm_exec_env_create((WASMModuleInstanceCommon *)module_inst,
-                                   module_inst->default_wasm_stack_size))) {
-        aot_set_exception(module_inst, "allocate memory failed");
-        return false;
+#if WASM_ENABLE_LIBC_WASI != 0
+    /*
+     * WASI reactor instances may assume that _initialize will be called by
+     * the environment at most once, and that none of their other exports
+     * are accessed before that call.
+     */
+    if (!is_sub_inst && module->import_wasi_api) {
+        initialize_func =
+            lookup_post_instantiate_func(module_inst, "_initialize");
     }
-
-    u.v = module->start_function;
-    u.f(exec_env);
-
-    wasm_exec_env_destroy(exec_env);
-    (void)clear_wasi_proc_exit_exception(module_inst);
-    return !aot_get_exception(module_inst);
-}
-
-#if WASM_ENABLE_BULK_MEMORY != 0
-static bool
-execute_memory_init_function(AOTModuleInstance *module_inst)
-{
-    AOTFunctionInstance *memory_init_func =
-        aot_lookup_function(module_inst, "__wasm_call_ctors", "()");
-
-    if (!memory_init_func)
-        /* Not found */
-        return true;
-
-    return aot_create_exec_env_and_call_function(module_inst, memory_init_func,
-                                                 0, NULL);
-}
 #endif
 
+    /* Execute possible "__post_instantiate" function if wasm app is
+       compiled by emsdk's early version */
+    if (!is_sub_inst) {
+        post_inst_func =
+            lookup_post_instantiate_func(module_inst, "__post_instantiate");
+    }
+
+#if WASM_ENABLE_BULK_MEMORY != 0
+    /* Only execute the memory init function for main instance since
+       the data segments will be dropped once initialized */
+    if (!is_sub_inst
+#if WASM_ENABLE_LIBC_WASI != 0
+        && !module->import_wasi_api
+#endif
+    ) {
+        call_ctors_func =
+            lookup_post_instantiate_func(module_inst, "__wasm_call_ctors");
+    }
+#endif
+
+    if (!module->start_function && !initialize_func && !post_inst_func
+        && !call_ctors_func) {
+        /* No post instantiation functions to call */
+        return true;
+    }
+
+    if (is_sub_inst) {
+        bh_assert(exec_env_main);
+#ifdef OS_ENABLE_HW_BOUND_CHECK
+        bh_assert(exec_env_tls == exec_env_main);
+        (void)exec_env_tls;
+#endif
+        exec_env = exec_env_main;
+
+        /* Temporarily replace parent exec_env's module inst to current
+           module inst to avoid checking failure when calling the
+           wasm functions, and ensure that the exec_env's module inst
+           is the correct one. */
+        module_inst_main = exec_env_main->module_inst;
+        exec_env->module_inst = (WASMModuleInstanceCommon *)module_inst;
+    }
+    else {
+        /* Try using the existing exec_env */
+#ifdef OS_ENABLE_HW_BOUND_CHECK
+        exec_env = exec_env_tls;
+#endif
+#if WASM_ENABLE_THREAD_MGR != 0
+        if (!exec_env)
+            exec_env = wasm_clusters_search_exec_env(
+                (WASMModuleInstanceCommon *)module_inst);
+#endif
+        if (!exec_env) {
+            if (!(exec_env = exec_env_created = wasm_exec_env_create(
+                      (WASMModuleInstanceCommon *)module_inst,
+                      module_inst->default_wasm_stack_size))) {
+                aot_set_exception(module_inst, "allocate memory failed");
+                return false;
+            }
+        }
+        else {
+            /* Temporarily replace exec_env's module inst with current
+               module inst to ensure that the exec_env's module inst
+               is the correct one. */
+            module_inst_main = exec_env->module_inst;
+            exec_env->module_inst = (WASMModuleInstanceCommon *)module_inst;
+        }
+    }
+
+    /* Execute start function for both main insance and sub instance */
+    if (module->start_function) {
+        AOTFunctionInstance start_func = { 0 };
+        uint32 func_type_idx;
+
+        start_func.func_name = "";
+        start_func.func_index = module->start_func_index;
+        start_func.is_import_func = false;
+        func_type_idx = module->func_type_indexes[module->start_func_index
+                                                  - module->import_func_count];
+        start_func.u.func.func_type = module->func_types[func_type_idx];
+        start_func.u.func.func_ptr = module->start_function;
+        if (!aot_call_function(exec_env, &start_func, 0, NULL)) {
+            goto fail;
+        }
+    }
+
+    if (initialize_func
+        && !aot_call_function(exec_env, initialize_func, 0, NULL)) {
+        goto fail;
+    }
+
+    if (post_inst_func
+        && !aot_call_function(exec_env, post_inst_func, 0, NULL)) {
+        goto fail;
+    }
+
+    if (call_ctors_func
+        && !aot_call_function(exec_env, call_ctors_func, 0, NULL)) {
+        goto fail;
+    }
+
+    ret = true;
+
+fail:
+    if (is_sub_inst) {
+        /* Restore the parent exec_env's module inst */
+        exec_env_main->module_inst = module_inst_main;
+    }
+    else {
+        if (module_inst_main)
+            /* Restore the existing exec_env's module inst */
+            exec_env->module_inst = module_inst_main;
+        if (exec_env_created)
+            wasm_exec_env_destroy(exec_env_created);
+    }
+
+    return ret;
+}
+
+static bool
+check_linked_symbol(AOTModule *module, char *error_buf, uint32 error_buf_size)
+{
+    uint32 i;
+
+    /* init_func_ptrs() will go through import functions */
+
+    for (i = 0; i < module->import_global_count; i++) {
+        AOTImportGlobal *global = module->import_globals + i;
+        if (!global->is_linked) {
+            set_error_buf_v(error_buf, error_buf_size,
+                            "failed to link import global (%s, %s)",
+                            global->module_name, global->global_name);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 AOTModuleInstance *
-aot_instantiate(AOTModule *module, bool is_sub_inst, uint32 stack_size,
-                uint32 heap_size, char *error_buf, uint32 error_buf_size)
+aot_instantiate(AOTModule *module, bool is_sub_inst, WASMExecEnv *exec_env_main,
+                uint32 stack_size, uint32 heap_size, char *error_buf,
+                uint32 error_buf_size)
 {
     AOTModuleInstance *module_inst;
     const uint32 module_inst_struct_size =
@@ -1059,6 +1169,9 @@ aot_instantiate(AOTModule *module, bool is_sub_inst, uint32 stack_size,
     if (!init_func_type_indexes(module_inst, module, error_buf, error_buf_size))
         goto fail;
 
+    if (!check_linked_symbol(module, error_buf, error_buf_size))
+        goto fail;
+
     if (!create_exports(module_inst, module, error_buf, error_buf_size))
         goto fail;
 
@@ -1076,6 +1189,17 @@ aot_instantiate(AOTModule *module, bool is_sub_inst, uint32 stack_size,
                 module->wasi_args.stdio[1], module->wasi_args.stdio[2],
                 error_buf, error_buf_size))
             goto fail;
+    }
+#endif
+
+#if WASM_ENABLE_WASI_NN != 0
+    if (!is_sub_inst) {
+        if (!(((AOTModuleInstanceExtra *)module_inst->e)->wasi_nn_ctx =
+                  wasi_nn_initialize())) {
+            set_error_buf(error_buf, error_buf_size,
+                          "wasi nn initialization failed");
+            goto fail;
+        }
     }
 #endif
 
@@ -1104,31 +1228,11 @@ aot_instantiate(AOTModule *module, bool is_sub_inst, uint32 stack_size,
     }
 #endif
 
-    /* Execute __post_instantiate function and start function*/
-    if (!execute_post_inst_function(module_inst)
-        || !execute_start_function(module_inst)) {
+    if (!execute_post_instantiate_functions(module_inst, is_sub_inst,
+                                            exec_env_main)) {
         set_error_buf(error_buf, error_buf_size, module_inst->cur_exception);
         goto fail;
     }
-
-#if WASM_ENABLE_BULK_MEMORY != 0
-#if WASM_ENABLE_LIBC_WASI != 0
-    if (!module->import_wasi_api) {
-#endif
-        /* Only execute the memory init function for main instance because
-            the data segments will be dropped once initialized.
-        */
-        if (!is_sub_inst) {
-            if (!execute_memory_init_function(module_inst)) {
-                set_error_buf(error_buf, error_buf_size,
-                              module_inst->cur_exception);
-                goto fail;
-            }
-        }
-#if WASM_ENABLE_LIBC_WASI != 0
-    }
-#endif
-#endif
 
 #if WASM_ENABLE_MEMORY_TRACING != 0
     wasm_runtime_dump_module_inst_mem_consumption(
@@ -1145,6 +1249,15 @@ fail:
 void
 aot_deinstantiate(AOTModuleInstance *module_inst, bool is_sub_inst)
 {
+    if (module_inst->exec_env_singleton) {
+        /* wasm_exec_env_destroy will call
+           wasm_cluster_wait_for_all_except_self to wait for other
+           threads, so as to destroy their exec_envs and module
+           instances first, and avoid accessing the shared resources
+           of current module instance after it is deinstantiated. */
+        wasm_exec_env_destroy((WASMExecEnv *)module_inst->exec_env_singleton);
+    }
+
 #if WASM_ENABLE_LIBC_WASI != 0
     /* Destroy wasi resource before freeing app heap, since some fields of
        wasi contex are allocated from app heap, and if app heap is freed,
@@ -1183,12 +1296,18 @@ aot_deinstantiate(AOTModuleInstance *module_inst, bool is_sub_inst)
     if (module_inst->func_type_indexes)
         wasm_runtime_free(module_inst->func_type_indexes);
 
-    if (module_inst->exec_env_singleton)
-        wasm_exec_env_destroy((WASMExecEnv *)module_inst->exec_env_singleton);
-
     if (((AOTModuleInstanceExtra *)module_inst->e)->c_api_func_imports)
         wasm_runtime_free(
             ((AOTModuleInstanceExtra *)module_inst->e)->c_api_func_imports);
+
+#if WASM_ENABLE_WASI_NN != 0
+    if (!is_sub_inst) {
+        WASINNContext *wasi_nn_ctx =
+            ((AOTModuleInstanceExtra *)module_inst->e)->wasi_nn_ctx;
+        if (wasi_nn_ctx)
+            wasi_nn_destroy(wasi_nn_ctx);
+    }
+#endif
 
     wasm_runtime_free(module_inst);
 }
@@ -1225,14 +1344,16 @@ invoke_native_with_hw_bound_check(WASMExecEnv *exec_env, void *func_ptr,
     uint16 result_count = func_type->result_count;
     const uint8 *types = func_type->types;
 #ifdef BH_PLATFORM_WINDOWS
-    const char *exce;
     int result;
+    bool has_exception;
+    char exception[EXCEPTION_BUF_LEN];
 #endif
     bool ret;
 
     /* Check native stack overflow firstly to ensure we have enough
        native stack to run the following codes before actually calling
        the aot function in invokeNative function. */
+    RECORD_STACK_USAGE(exec_env, (uint8 *)&module_inst);
     if ((uint8 *)&module_inst < exec_env->native_stack_boundary
                                     + page_size * (guard_page_count + 1)) {
         aot_set_exception_with_id(module_inst, EXCE_NATIVE_STACK_OVERFLOW);
@@ -1259,14 +1380,14 @@ invoke_native_with_hw_bound_check(WASMExecEnv *exec_env, void *func_ptr,
                 void (*NativeFunc)(WASMExecEnv *, uint32) =
                     (void (*)(WASMExecEnv *, uint32))func_ptr;
                 NativeFunc(exec_env, argv[0]);
-                ret = aot_get_exception(module_inst) ? false : true;
+                ret = aot_copy_exception(module_inst, NULL) ? false : true;
             }
             else if (result_count == 1
                      && types[param_count] == VALUE_TYPE_I32) {
                 uint32 (*NativeFunc)(WASMExecEnv *, uint32) =
                     (uint32(*)(WASMExecEnv *, uint32))func_ptr;
                 argv_ret[0] = NativeFunc(exec_env, argv[0]);
-                ret = aot_get_exception(module_inst) ? false : true;
+                ret = aot_copy_exception(module_inst, NULL) ? false : true;
             }
             else {
                 ret = wasm_runtime_invoke_native(exec_env, func_ptr, func_type,
@@ -1280,8 +1401,8 @@ invoke_native_with_hw_bound_check(WASMExecEnv *exec_env, void *func_ptr,
                                              argv_ret);
         }
 #ifdef BH_PLATFORM_WINDOWS
-        if ((exce = aot_get_exception(module_inst))
-            && strstr(exce, "native stack overflow")) {
+        has_exception = aot_copy_exception(module_inst, exception);
+        if (has_exception && strstr(exception, "native stack overflow")) {
             /* After a stack overflow, the stack was left
                in a damaged state, let the CRT repair it */
             result = _resetstkoflw();
@@ -1384,13 +1505,6 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         ret = invoke_native_internal(exec_env, function->u.func.func_ptr,
                                      func_type, NULL, NULL, argv1, argc, argv);
 
-        if (!ret || aot_get_exception(module_inst)) {
-            if (clear_wasi_proc_exit_exception(module_inst))
-                ret = true;
-            else
-                ret = false;
-        }
-
 #if WASM_ENABLE_DUMP_CALL_STACK != 0
         if (!ret) {
             if (aot_create_call_stack(exec_env)) {
@@ -1450,11 +1564,8 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         ret = invoke_native_internal(exec_env, function->u.func.func_ptr,
                                      func_type, NULL, NULL, argv, argc, argv);
 
-        if (clear_wasi_proc_exit_exception(module_inst))
-            ret = true;
-
 #if WASM_ENABLE_DUMP_CALL_STACK != 0
-        if (aot_get_exception(module_inst)) {
+        if (aot_copy_exception(module_inst, NULL)) {
             if (aot_create_call_stack(exec_env)) {
                 aot_dump_call_stack(exec_env, true, NULL, 0);
             }
@@ -1465,41 +1576,8 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         aot_free_frame(exec_env);
 #endif
 
-        return ret && !aot_get_exception(module_inst) ? true : false;
+        return ret && !aot_copy_exception(module_inst, NULL) ? true : false;
     }
-}
-
-bool
-aot_create_exec_env_and_call_function(AOTModuleInstance *module_inst,
-                                      AOTFunctionInstance *func, unsigned argc,
-                                      uint32 argv[])
-{
-    WASMExecEnv *exec_env = NULL, *existing_exec_env = NULL;
-    bool ret;
-
-#if defined(OS_ENABLE_HW_BOUND_CHECK)
-    existing_exec_env = exec_env = wasm_runtime_get_exec_env_tls();
-#elif WASM_ENABLE_THREAD_MGR != 0
-    existing_exec_env = exec_env =
-        wasm_clusters_search_exec_env((WASMModuleInstanceCommon *)module_inst);
-#endif
-
-    if (!existing_exec_env) {
-        if (!(exec_env =
-                  wasm_exec_env_create((WASMModuleInstanceCommon *)module_inst,
-                                       module_inst->default_wasm_stack_size))) {
-            aot_set_exception(module_inst, "allocate memory failed");
-            return false;
-        }
-    }
-
-    ret = aot_call_function(exec_env, func, argc, argv);
-
-    /* don't destroy the exec_env if it isn't created in this function */
-    if (!existing_exec_env)
-        wasm_exec_env_destroy(exec_env);
-
-    return ret;
 }
 
 void
@@ -1524,8 +1602,16 @@ aot_get_exception(AOTModuleInstance *module_inst)
     return wasm_get_exception(module_inst);
 }
 
+bool
+aot_copy_exception(AOTModuleInstance *module_inst, char *exception_buf)
+{
+    /* The field offsets of cur_exception in AOTModuleInstance and
+       WASMModuleInstance are the same */
+    return wasm_copy_exception(module_inst, exception_buf);
+}
+
 static bool
-execute_malloc_function(AOTModuleInstance *module_inst,
+execute_malloc_function(AOTModuleInstance *module_inst, WASMExecEnv *exec_env,
                         AOTFunctionInstance *malloc_func,
                         AOTFunctionInstance *retain_func, uint32 size,
                         uint32 *p_result)
@@ -1533,6 +1619,8 @@ execute_malloc_function(AOTModuleInstance *module_inst,
 #ifdef OS_ENABLE_HW_BOUND_CHECK
     WASMExecEnv *exec_env_tls = wasm_runtime_get_exec_env_tls();
 #endif
+    WASMExecEnv *exec_env_created = NULL;
+    WASMModuleInstanceCommon *module_inst_old = NULL;
     uint32 argv[2], argc;
     bool ret;
 
@@ -1543,27 +1631,53 @@ execute_malloc_function(AOTModuleInstance *module_inst,
         argc = 2;
     }
 
+    if (exec_env) {
 #ifdef OS_ENABLE_HW_BOUND_CHECK
-    if (exec_env_tls != NULL) {
-        bh_assert(exec_env_tls->module_inst
-                  == (WASMModuleInstanceCommon *)module_inst);
-        ret = aot_call_function(exec_env_tls, malloc_func, argc, argv);
-
-        if (retain_func && ret) {
-            ret = aot_call_function(exec_env_tls, retain_func, 1, argv);
+        if (exec_env_tls) {
+            bh_assert(exec_env_tls == exec_env);
         }
-    }
-    else
 #endif
-    {
-        ret = aot_create_exec_env_and_call_function(module_inst, malloc_func,
-                                                    argc, argv);
-
-        if (retain_func && ret) {
-            ret = aot_create_exec_env_and_call_function(module_inst,
-                                                        retain_func, 1, argv);
+        bh_assert(exec_env->module_inst
+                  == (WASMModuleInstanceCommon *)module_inst);
+    }
+    else {
+        /* Try using the existing exec_env */
+#ifdef OS_ENABLE_HW_BOUND_CHECK
+        exec_env = exec_env_tls;
+#endif
+#if WASM_ENABLE_THREAD_MGR != 0
+        if (!exec_env)
+            exec_env = wasm_clusters_search_exec_env(
+                (WASMModuleInstanceCommon *)module_inst);
+#endif
+        if (!exec_env) {
+            if (!(exec_env = exec_env_created = wasm_exec_env_create(
+                      (WASMModuleInstanceCommon *)module_inst,
+                      module_inst->default_wasm_stack_size))) {
+                wasm_set_exception(module_inst, "allocate memory failed");
+                return false;
+            }
+        }
+        else {
+            /* Temporarily replace exec_env's module inst with current
+               module inst to ensure that the exec_env's module inst
+               is the correct one. */
+            module_inst_old = exec_env->module_inst;
+            exec_env->module_inst = (WASMModuleInstanceCommon *)module_inst;
         }
     }
+
+    ret = aot_call_function(exec_env, malloc_func, argc, argv);
+
+    if (retain_func && ret)
+        ret = aot_call_function(exec_env, retain_func, 1, argv);
+
+    if (module_inst_old)
+        /* Restore the existing exec_env's module inst */
+        exec_env->module_inst = module_inst_old;
+
+    if (exec_env_created)
+        wasm_exec_env_destroy(exec_env_created);
 
     if (ret)
         *p_result = argv[0];
@@ -1571,32 +1685,71 @@ execute_malloc_function(AOTModuleInstance *module_inst,
 }
 
 static bool
-execute_free_function(AOTModuleInstance *module_inst,
+execute_free_function(AOTModuleInstance *module_inst, WASMExecEnv *exec_env,
                       AOTFunctionInstance *free_func, uint32 offset)
 {
 #ifdef OS_ENABLE_HW_BOUND_CHECK
     WASMExecEnv *exec_env_tls = wasm_runtime_get_exec_env_tls();
 #endif
+    WASMExecEnv *exec_env_created = NULL;
+    WASMModuleInstanceCommon *module_inst_old = NULL;
     uint32 argv[2];
+    bool ret;
 
     argv[0] = offset;
+
+    if (exec_env) {
 #ifdef OS_ENABLE_HW_BOUND_CHECK
-    if (exec_env_tls != NULL) {
-        bh_assert(exec_env_tls->module_inst
-                  == (WASMModuleInstanceCommon *)module_inst);
-        return aot_call_function(exec_env_tls, free_func, 1, argv);
-    }
-    else
+        if (exec_env_tls) {
+            bh_assert(exec_env_tls == exec_env);
+        }
 #endif
-    {
-        return aot_create_exec_env_and_call_function(module_inst, free_func, 1,
-                                                     argv);
+        bh_assert(exec_env->module_inst
+                  == (WASMModuleInstanceCommon *)module_inst);
     }
+    else {
+        /* Try using the existing exec_env */
+#ifdef OS_ENABLE_HW_BOUND_CHECK
+        exec_env = exec_env_tls;
+#endif
+#if WASM_ENABLE_THREAD_MGR != 0
+        if (!exec_env)
+            exec_env = wasm_clusters_search_exec_env(
+                (WASMModuleInstanceCommon *)module_inst);
+#endif
+        if (!exec_env) {
+            if (!(exec_env = exec_env_created = wasm_exec_env_create(
+                      (WASMModuleInstanceCommon *)module_inst,
+                      module_inst->default_wasm_stack_size))) {
+                wasm_set_exception(module_inst, "allocate memory failed");
+                return false;
+            }
+        }
+        else {
+            /* Temporarily replace exec_env's module inst with current
+               module inst to ensure that the exec_env's module inst
+               is the correct one. */
+            module_inst_old = exec_env->module_inst;
+            exec_env->module_inst = (WASMModuleInstanceCommon *)module_inst;
+        }
+    }
+
+    ret = aot_call_function(exec_env, free_func, 1, argv);
+
+    if (module_inst_old)
+        /* Restore the existing exec_env's module inst */
+        exec_env->module_inst = module_inst_old;
+
+    if (exec_env_created)
+        wasm_exec_env_destroy(exec_env_created);
+
+    return ret;
 }
 
 uint32
-aot_module_malloc(AOTModuleInstance *module_inst, uint32 size,
-                  void **p_native_addr)
+aot_module_malloc_internal(AOTModuleInstance *module_inst,
+                           WASMExecEnv *exec_env, uint32 size,
+                           void **p_native_addr)
 {
     AOTMemoryInstance *memory_inst = aot_get_default_memory(module_inst);
     AOTModule *module = (AOTModule *)module_inst->module;
@@ -1633,8 +1786,8 @@ aot_module_malloc(AOTModuleInstance *module_inst, uint32 size,
             aot_lookup_function(module_inst, malloc_func_name, malloc_func_sig);
 
         if (!malloc_func
-            || !execute_malloc_function(module_inst, malloc_func, retain_func,
-                                        size, &offset)) {
+            || !execute_malloc_function(module_inst, exec_env, malloc_func,
+                                        retain_func, size, &offset)) {
             return 0;
         }
         addr = offset ? (uint8 *)memory_inst->memory_data + offset : NULL;
@@ -1657,8 +1810,9 @@ aot_module_malloc(AOTModuleInstance *module_inst, uint32 size,
 }
 
 uint32
-aot_module_realloc(AOTModuleInstance *module_inst, uint32 ptr, uint32 size,
-                   void **p_native_addr)
+aot_module_realloc_internal(AOTModuleInstance *module_inst,
+                            WASMExecEnv *exec_env, uint32 ptr, uint32 size,
+                            void **p_native_addr)
 {
     AOTMemoryInstance *memory_inst = aot_get_default_memory(module_inst);
     uint8 *addr = NULL;
@@ -1675,6 +1829,7 @@ aot_module_realloc(AOTModuleInstance *module_inst, uint32 ptr, uint32 size,
     }
 
     /* Only support realloc in WAMR's app heap */
+    (void)exec_env;
 
     if (!addr) {
         if (memory_inst->heap_handle
@@ -1693,7 +1848,8 @@ aot_module_realloc(AOTModuleInstance *module_inst, uint32 ptr, uint32 size,
 }
 
 void
-aot_module_free(AOTModuleInstance *module_inst, uint32 ptr)
+aot_module_free_internal(AOTModuleInstance *module_inst, WASMExecEnv *exec_env,
+                         uint32 ptr)
 {
     AOTMemoryInstance *memory_inst = aot_get_default_memory(module_inst);
     AOTModule *module = (AOTModule *)module_inst->module;
@@ -1727,9 +1883,30 @@ aot_module_free(AOTModuleInstance *module_inst, uint32 ptr)
                 free_func = aot_lookup_function(module_inst, "__unpin", "(i)i");
 
             if (free_func)
-                execute_free_function(module_inst, free_func, ptr);
+                execute_free_function(module_inst, exec_env, free_func, ptr);
         }
     }
+}
+
+uint32
+aot_module_malloc(AOTModuleInstance *module_inst, uint32 size,
+                  void **p_native_addr)
+{
+    return aot_module_malloc_internal(module_inst, NULL, size, p_native_addr);
+}
+
+uint32
+aot_module_realloc(AOTModuleInstance *module_inst, uint32 ptr, uint32 size,
+                   void **p_native_addr)
+{
+    return aot_module_realloc_internal(module_inst, NULL, ptr, size,
+                                       p_native_addr);
+}
+
+void
+aot_module_free(AOTModuleInstance *module_inst, uint32 ptr)
+{
+    aot_module_free_internal(module_inst, NULL, ptr);
 }
 
 uint32
@@ -1764,7 +1941,9 @@ aot_invoke_native(WASMExecEnv *exec_env, uint32 func_idx, uint32 argc,
     AOTModuleInstanceExtra *module_inst_extra =
         (AOTModuleInstanceExtra *)module_inst->e;
     CApiFuncImport *c_api_func_import =
-        module_inst_extra->c_api_func_imports + func_idx;
+        module_inst_extra->c_api_func_imports
+            ? module_inst_extra->c_api_func_imports + func_idx
+            : NULL;
     uint32 *func_type_indexes = module_inst->func_type_indexes;
     uint32 func_type_idx = func_type_indexes[func_idx];
     AOTFuncType *func_type = aot_module->func_types[func_type_idx];
@@ -1780,7 +1959,8 @@ aot_invoke_native(WASMExecEnv *exec_env, uint32 func_idx, uint32 argc,
 
     import_func = aot_module->import_funcs + func_idx;
     if (import_func->call_conv_wasm_c_api)
-        func_ptr = c_api_func_import->func_ptr_linked;
+        func_ptr =
+            c_api_func_import ? c_api_func_import->func_ptr_linked : NULL;
 
     if (!func_ptr) {
         snprintf(buf, sizeof(buf),
@@ -1839,6 +2019,7 @@ aot_call_indirect(WASMExecEnv *exec_env, uint32 tbl_idx, uint32 table_elem_idx,
        exec_env->native_stack_boundary must have been set, we don't set
        it again */
 
+    RECORD_STACK_USAGE(exec_env, (uint8 *)&module_inst);
     if ((uint8 *)&module_inst < exec_env->native_stack_boundary) {
         aot_set_exception_with_id(module_inst, EXCE_NATIVE_STACK_OVERFLOW);
         goto fail;
@@ -1980,9 +2161,6 @@ aot_call_indirect(WASMExecEnv *exec_env, uint32 tbl_idx, uint32 table_elem_idx,
     }
 
 fail:
-    if (clear_wasi_proc_exit_exception(module_inst))
-        return true;
-
 #ifdef OS_ENABLE_HW_BOUND_CHECK
     wasm_runtime_access_exce_check_guard_page();
 #endif

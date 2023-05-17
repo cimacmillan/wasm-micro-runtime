@@ -3,12 +3,12 @@
 Prepare WASM building environments
 ==================================
 
-For C and C++, WASI-SDK version 12.0+ is the major tool supported by WAMR to build WASM applications. Also, we can use [Emscripten SDK (EMSDK)](https://github.com/emscripten-core/emsdk), but it is not recommended. And there are some other compilers such as the standard clang compiler, which might also work [here](./other_wasm_compilers.md).
+For C and C++, WASI-SDK version 19.0+ is the major tool supported by WAMR to build WASM applications. Also, we can use [Emscripten SDK (EMSDK)](https://github.com/emscripten-core/emsdk), but it is not recommended. And there are some other compilers such as the standard clang compiler, which might also work [here](./other_wasm_compilers.md).
 
 To install WASI SDK, please download the [wasi-sdk release](https://github.com/CraneStation/wasi-sdk/releases) and extract the archive to default path `/opt/wasi-sdk`.
 
 The official *wasi-sdk release* doesn't fully support *latest 128-bit SIMD spec* yet. WAMR provides a script in [build-wasi-sdk](../test-tools/build-wasi-sdk/) to generate
-another wasi-sdk with *llvm-13* from source code and installs it at *../test-tools/wasi-sdk*. If you plan to build WASM applications with *latest 128-bit SIMD*, please use it instead of the official release.
+another wasi-sdk with *llvm-15* from source code and installs it at *../test-tools/wasi-sdk*. If you plan to build WASM applications with *latest 128-bit SIMD*, please use it instead of the official release.
 
 And [sample workloads](../samples/workload) are using the self-compiled wasi-sdk.
 
@@ -394,7 +394,7 @@ Examples: wamrc -o test.aot test.wasm
 
 ### Usage example
 ``` bash
-WAMRC_LLC_COMPILER=<path/to/your/compiler/driver> ./wamrc -o test.aot test.wasm
+WAMRC_LLC_COMPILER=/usr/local/opt/llvm@14/bin/clang WAMRC_LLC_FLAGS="--target=x86_64-pc-linux-gnu -mcmodel=medium -c -O3" ./wamrc -o test.aot test.wasm
 ```
 
 > Note: `wamrc` will verify whether the specified file exists and executable. If verification failed, `wamrc` will report a warning and fallback to normal pipeline. Since the verification is based on file, you **must specify the absolute path to the binary** even if it's in `$PATH`
@@ -402,6 +402,8 @@ WAMRC_LLC_COMPILER=<path/to/your/compiler/driver> ./wamrc -o test.aot test.wasm
 > Note: `WAMRC_LLC_COMPILER` has higher priority than `WAMRC_ASM_COMPILER`, if `WAMRC_LLC_COMPILER` is set and verified, then `WAMRC_ASM_COMPILER` will be ignored.
 
 > Note: the `LLC` and `ASM` in the env name just means this compiler will be used to compile the `LLVM IR file`/`assembly file` to object file, usually passing the compiler driver is the simplest way. (e.g. for LLVM toolchain, you don't need to pass `/usr/bin/llc`, using `/usr/bin/clang` is OK)
+
+> Note: You might need to set `WAMRC_LLC_FLAGS`/`WAMRC_ASM_FLAGS` to match whatever the `wamrc` command would automatically do. In the above example, `-mcmodel=medium` corresponds to `wamrc --size-level=1`, which is the default of `wamrc` on macOS.
 
 Run WASM app in WAMR mini product build
 =======================================

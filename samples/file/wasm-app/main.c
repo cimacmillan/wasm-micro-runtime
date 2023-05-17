@@ -18,7 +18,7 @@
 #define WORLD_OFFSET 7
 #define NAME_REPLACMENT "James"
 #define NAME_REPLACMENT_LEN (sizeof(NAME_REPLACMENT) - 1)
-#define ADDITIONAL_SPACE 10
+#define ADDITIONAL_SPACE 1 * 1024 * 1024
 
 int
 main(int argc, char **argv)
@@ -99,8 +99,32 @@ main(int argc, char **argv)
     assert(ftell(file) == strlen(FILE_TEXT));
     printf("[Test] Reading at specified offset passed.\n");
 
+    // Test: moving at the start of the file (fseek)
+    printf("Move at the start of the file (fseek)..\n");
+    printf("File current offset: %ld\n", ftell(file));
+    fseek(file, 0, SEEK_SET);
+    printf("File current offset: %ld\n", ftell(file));
+    assert(ftell(file) == 0);
+
+    // Test: moving at the end of the file (fseek)
+    printf("Move at the end of the file (fseek)..\n");
+    printf("File current offset: %ld\n", ftell(file));
+    fseek(file, 0, SEEK_END);
+    printf("File current offset: %ld\n", ftell(file));
+    assert(ftell(file) == strlen(FILE_TEXT));
+    int end_position = ftell(file) / 2;
+
+    // Test: moving at the middle of the file (fseek)
+    printf("Move at the middle of the file (fseek)..\n");
+    printf("File current offset: %ld\n", ftell(file));
+    fseek(file, 0, SEEK_SET);
+    fseek(file, end_position, SEEK_CUR);
+    printf("File current offset: %ld\n", ftell(file));
+    assert(ftell(file) == end_position);
+
     // Test: allocate more space to the file (posix_fallocate)
-    printf("Allocate more space to the file..\n");
+    printf("Allocate more space to the file (posix_fallocate)..\n");
+    fseek(file, 0, SEEK_END);
     posix_fallocate(fileno(file), ftell(file), ADDITIONAL_SPACE);
     printf("File current offset: %ld\n", ftell(file));
     printf("Moving to the end..\n");
@@ -110,14 +134,31 @@ main(int argc, char **argv)
     printf("[Test] Allocation or more space passed.\n");
 
     // Test: allocate more space to the file (ftruncate)
-    printf("Extend the file size of 10 bytes using ftruncate..\n");
-    ftruncate(fileno(file), ftell(file) + 10);
+    printf("Allocate more space to the file (ftruncate)..\n");
+    ftruncate(fileno(file), ftell(file) + ADDITIONAL_SPACE);
     assert(ftell(file) == strlen(text) + ADDITIONAL_SPACE);
     printf("File current offset: %ld\n", ftell(file));
     printf("Moving to the end..\n");
     fseek(file, 0, SEEK_END);
     printf("File current offset: %ld\n", ftell(file));
     assert(ftell(file) == strlen(text) + 2 * ADDITIONAL_SPACE);
+    printf("[Test] Extension of the file size passed.\n");
+
+    // Test: allocate more space to the file (fseek, from the start)
+    printf("Allocate more space to the file (fseek) from the start..\n");
+    printf("File current offset: %ld\n", ftell(file));
+    fseek(file, 3 * ADDITIONAL_SPACE, SEEK_SET);
+    printf("File current offset: %ld\n", ftell(file));
+    assert(ftell(file) == 3 * ADDITIONAL_SPACE);
+    printf("[Test] Extension of the file size passed.\n");
+
+    // Test: allocate more space to the file (fseek, from the middle)
+    printf("Allocate more space to the file (fseek) from the middle..\n");
+    fseek(file, 3 * ADDITIONAL_SPACE, SEEK_SET);
+    printf("File current offset: %ld\n", ftell(file));
+    fseek(file, 2 * ADDITIONAL_SPACE, SEEK_CUR);
+    printf("File current offset: %ld\n", ftell(file));
+    assert(ftell(file) == 5 * ADDITIONAL_SPACE);
     printf("[Test] Extension of the file size passed.\n");
 
     // Display some debug information

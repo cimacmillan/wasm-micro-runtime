@@ -1708,8 +1708,8 @@ handle_name_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
                         read_leb_uint32(p, p_end, func_name_len);
                         CHECK_BUF(p, p_end, func_name_len);
                         /* Skip the import functions */
-                        if (func_index >= module->import_count) {
-                            func_index -= module->import_count;
+                        if (func_index >= module->import_function_count) {
+                            func_index -= module->import_function_count;
                             bh_assert(func_index < module->function_count);
                             if (!(module->functions[func_index]->field_name =
                                       const_str_list_insert(
@@ -1733,6 +1733,8 @@ handle_name_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
         i++;
     }
 
+    (void)previous_name_type;
+    (void)previous_func_index;
     return true;
 }
 #endif
@@ -1833,6 +1835,7 @@ static bool
 init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
                                uint32 error_buf_size)
 {
+    LLVMJITOptions llvm_jit_options = wasm_runtime_get_llvm_jit_options();
     AOTCompOption option = { 0 };
     char *aot_last_error;
     uint64 size;
@@ -1871,8 +1874,9 @@ init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
     }
 
     option.is_jit_mode = true;
-    option.opt_level = 3;
-    option.size_level = 3;
+    option.opt_level = llvm_jit_options.opt_level;
+    option.size_level = llvm_jit_options.size_level;
+
 #if WASM_ENABLE_BULK_MEMORY != 0
     option.enable_bulk_memory = true;
 #endif
@@ -1891,6 +1895,9 @@ init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
     option.enable_aux_stack_check = true;
 #if (WASM_ENABLE_PERF_PROFILING != 0) || (WASM_ENABLE_DUMP_CALL_STACK != 0)
     option.enable_aux_stack_frame = true;
+#endif
+#if WASM_ENABLE_MEMORY_PROFILING != 0
+    option.enable_stack_estimation = true;
 #endif
 
     module->comp_ctx = aot_create_comp_context(module->comp_data, &option);
@@ -1955,6 +1962,8 @@ init_llvm_jit_functions_stage2(WASMModule *module, char *error_buf,
         module->func_ptrs[i] = (void *)func_addr;
 
 #if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_LAZY_JIT != 0
+        module->functions[i]->llvm_jit_func_ptr = (void *)func_addr;
+
         if (module->orcjit_stop_compiling)
             return false;
 #endif
@@ -2016,6 +2025,11 @@ orcjit_thread_callback(void *arg)
             return NULL;
         }
     }
+#if WASM_ENABLE_JIT != 0 && WASM_ENABLE_LAZY_JIT != 0
+    os_mutex_lock(&module->tierup_wait_lock);
+    module->fast_jit_ready_groups++;
+    os_mutex_unlock(&module->tierup_wait_lock);
+#endif
 #endif
 
 #if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
@@ -2043,11 +2057,13 @@ orcjit_thread_callback(void *arg)
         }
     }
 
-    /* Wait until init_llvm_jit_functions_stage2 finishes */
+    /* Wait until init_llvm_jit_functions_stage2 finishes and all
+       fast jit functions are compiled */
     os_mutex_lock(&module->tierup_wait_lock);
-    while (!module->llvm_jit_inited) {
+    while (!(module->llvm_jit_inited && module->enable_llvm_jit_compilation
+             && module->fast_jit_ready_groups >= group_stride)) {
         os_cond_reltimedwait(&module->tierup_wait_cond,
-                             &module->tierup_wait_lock, 10);
+                             &module->tierup_wait_lock, 10000);
         if (module->orcjit_stop_compiling) {
             /* init_llvm_jit_functions_stage2 failed */
             os_mutex_unlock(&module->tierup_wait_lock);
@@ -2716,7 +2732,8 @@ create_module(char *error_buf, uint32 error_buf_size)
     bh_assert(ret == BH_LIST_SUCCESS);
 #endif
 
-#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT && WASM_ENABLE_LAZY_JIT != 0
+#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
+    && WASM_ENABLE_LAZY_JIT != 0
     if (os_mutex_init(&module->instance_list_lock) != 0) {
         set_error_buf(error_buf, error_buf_size,
                       "init instance list lock failed");
@@ -2937,7 +2954,8 @@ wasm_loader_unload(WASMModule *module)
     if (!module)
         return;
 
-#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT && WASM_ENABLE_LAZY_JIT != 0
+#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
+    && WASM_ENABLE_LAZY_JIT != 0
     module->orcjit_stop_compiling = true;
     if (module->llvm_jit_init_thread)
         os_thread_join(module->llvm_jit_init_thread, NULL);
@@ -2958,7 +2976,8 @@ wasm_loader_unload(WASMModule *module)
         aot_destroy_comp_data(module->comp_data);
 #endif
 
-#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT && WASM_ENABLE_LAZY_JIT != 0
+#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
+    && WASM_ENABLE_LAZY_JIT != 0
     if (module->tierup_wait_lock_inited) {
         os_mutex_destroy(&module->tierup_wait_lock);
         os_cond_destroy(&module->tierup_wait_cond);
@@ -2993,9 +3012,9 @@ wasm_loader_unload(WASMModule *module)
                         module->functions[i]->fast_jit_jitted_code);
                 }
 #if WASM_ENABLE_JIT != 0 && WASM_ENABLE_LAZY_JIT != 0
-                if (module->functions[i]->llvm_jit_func_ptr) {
+                if (module->functions[i]->call_to_fast_jit_from_llvm_jit) {
                     jit_code_cache_free(
-                        module->functions[i]->llvm_jit_func_ptr);
+                        module->functions[i]->call_to_fast_jit_from_llvm_jit);
                 }
 #endif
 #endif
@@ -3054,7 +3073,8 @@ wasm_loader_unload(WASMModule *module)
     }
 #endif
 
-#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT && WASM_ENABLE_LAZY_JIT != 0
+#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
+    && WASM_ENABLE_LAZY_JIT != 0
     os_mutex_destroy(&module->instance_list_lock);
 #endif
 
@@ -6364,12 +6384,13 @@ re_scan:
                     goto fail;
                 }
 
-                if (func_idx == cur_func_idx + module->import_function_count) {
+                /* Refer to a forward-declared function */
+                if (func_idx >= cur_func_idx + module->import_function_count) {
                     WASMTableSeg *table_seg = module->table_segments;
                     bool func_declared = false;
                     uint32 j;
 
-                    /* Check whether current function is declared */
+                    /* Check whether the function is declared in table segs */
                     for (i = 0; i < module->table_seg_count; i++, table_seg++) {
                         if (table_seg->elem_type == VALUE_TYPE_FUNCREF
                             && wasm_elem_is_declarative(table_seg->mode)) {
@@ -6382,10 +6403,17 @@ re_scan:
                         }
                     }
                     if (!func_declared) {
-                        set_error_buf(error_buf, error_buf_size,
-                                      "undeclared function reference");
-                        goto fail;
+                        /* Check whether the function is exported */
+                        for (i = 0; i < module->export_count; i++) {
+                            if (module->exports[i].kind == EXPORT_KIND_FUNC
+                                && module->exports[i].index == func_idx) {
+                                func_declared = true;
+                                break;
+                            }
+                        }
                     }
+                    bh_assert(func_declared);
+                    (void)func_declared;
                 }
 
 #if WASM_ENABLE_FAST_INTERP != 0

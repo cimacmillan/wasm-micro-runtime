@@ -684,7 +684,7 @@ adjust_table_max_size(uint32 init_size, uint32 max_size_flag, uint32 *max_size)
     }
 }
 
-#if WASM_ENABLE_MULTI_MODULE != 0
+#if WASM_ENABLE_LIBC_WASI != 0 || WASM_ENABLE_MULTI_MODULE != 0
 /**
  * Find export item of a module with export info:
  *  module name, field name and export kind
@@ -718,11 +718,15 @@ wasm_loader_find_export(const WASMModule *module, const char *module_name,
         return NULL;
     }
 
+    (void)module_name;
+
     /* since there is a validation in load_export_section(), it is for sure
      * export->index is valid*/
     return export;
 }
+#endif
 
+#if WASM_ENABLE_MULTI_MODULE != 0
 static WASMFunction *
 wasm_loader_resolve_function(const char *module_name, const char *function_name,
                              const WASMType *expected_function_type,
@@ -1240,6 +1244,8 @@ load_table_import(const uint8 **p_buf, const uint8 *buf_end,
     table->init_size = declare_init_size;
     table->flags = declare_max_size_flag;
     table->max_size = declare_max_size;
+
+    (void)parent_module;
     return true;
 fail:
     return false;
@@ -1373,6 +1379,8 @@ load_memory_import(const uint8 **p_buf, const uint8 *buf_end,
     memory->num_bytes_per_page = DEFAULT_NUM_BYTES_PER_PAGE;
 
     *p_buf = p;
+
+    (void)parent_module;
     return true;
 fail:
     return false;
@@ -1391,6 +1399,7 @@ load_global_import(const uint8 **p_buf, const uint8 *buf_end,
     WASMModule *sub_module = NULL;
     WASMGlobal *linked_global = NULL;
 #endif
+    bool ret = false;
 
     CHECK_BUF(p, p_end, 2);
     declare_type = read_uint8(p);
@@ -1403,15 +1412,16 @@ load_global_import(const uint8 **p_buf, const uint8 *buf_end,
     }
 
 #if WASM_ENABLE_LIBC_BUILTIN != 0
-    global->is_linked = wasm_native_lookup_libc_builtin_global(
-        sub_module_name, global_name, global);
-    if (global->is_linked) {
+    ret = wasm_native_lookup_libc_builtin_global(sub_module_name, global_name,
+                                                 global);
+    if (ret) {
         if (global->type != declare_type
             || global->is_mutable != declare_mutable) {
             set_error_buf(error_buf, error_buf_size,
                           "incompatible import type");
             return false;
         }
+        global->is_linked = true;
     }
 #endif
 #if WASM_ENABLE_MULTI_MODULE != 0
@@ -1439,6 +1449,9 @@ load_global_import(const uint8 **p_buf, const uint8 *buf_end,
     global->field_name = global_name;
     global->type = declare_type;
     global->is_mutable = (declare_mutable == 1);
+
+    (void)parent_module;
+    (void)ret;
     return true;
 fail:
     return false;
@@ -2381,6 +2394,7 @@ load_func_index_vec(const uint8 **p_buf, const uint8 *buf_end,
         }
 #else
         read_leb_uint32(p, p_end, function_index);
+        (void)use_init_expr;
 #endif
 
         /* since we are using -1 to indicate ref.null */
@@ -2690,6 +2704,7 @@ load_code_section(const uint8 *buf, const uint8 *buf_end, const uint8 *buf_func,
     }
 
     LOG_VERBOSE("Load code segment section success.\n");
+    (void)module;
     return true;
 fail:
     return false;
@@ -2794,8 +2809,8 @@ handle_name_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
                         read_leb_uint32(p, p_end, func_name_len);
                         CHECK_BUF(p, p_end, func_name_len);
                         /* Skip the import functions */
-                        if (func_index >= module->import_count) {
-                            func_index -= module->import_count;
+                        if (func_index >= module->import_function_count) {
+                            func_index -= module->import_function_count;
                             if (func_index >= module->function_count) {
                                 set_error_buf(error_buf, error_buf_size,
                                               "out-of-range function index");
@@ -2900,6 +2915,8 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
 
     LOG_VERBOSE("Ignore custom section [%s].", section_name);
 
+    (void)is_load_from_file_buf;
+    (void)module;
     return true;
 fail:
     return false;
@@ -2975,6 +2992,7 @@ static bool
 init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
                                uint32 error_buf_size)
 {
+    LLVMJITOptions llvm_jit_options = wasm_runtime_get_llvm_jit_options();
     AOTCompOption option = { 0 };
     char *aot_last_error;
     uint64 size;
@@ -3013,8 +3031,11 @@ init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
     }
 
     option.is_jit_mode = true;
-    option.opt_level = 3;
-    option.size_level = 3;
+
+    llvm_jit_options = wasm_runtime_get_llvm_jit_options();
+    option.opt_level = llvm_jit_options.opt_level;
+    option.size_level = llvm_jit_options.size_level;
+
 #if WASM_ENABLE_BULK_MEMORY != 0
     option.enable_bulk_memory = true;
 #endif
@@ -3033,6 +3054,9 @@ init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
     option.enable_aux_stack_check = true;
 #if (WASM_ENABLE_PERF_PROFILING != 0) || (WASM_ENABLE_DUMP_CALL_STACK != 0)
     option.enable_aux_stack_frame = true;
+#endif
+#if WASM_ENABLE_MEMORY_PROFILING != 0
+    option.enable_stack_estimation = true;
 #endif
 
     module->comp_ctx = aot_create_comp_context(module->comp_data, &option);
@@ -3095,6 +3119,8 @@ init_llvm_jit_functions_stage2(WASMModule *module, char *error_buf,
         module->func_ptrs[i] = (void *)func_addr;
 
 #if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_LAZY_JIT != 0
+        module->functions[i]->llvm_jit_func_ptr = (void *)func_addr;
+
         if (module->orcjit_stop_compiling)
             return false;
 #endif
@@ -3156,6 +3182,11 @@ orcjit_thread_callback(void *arg)
             return NULL;
         }
     }
+#if WASM_ENABLE_JIT != 0 && WASM_ENABLE_LAZY_JIT != 0
+    os_mutex_lock(&module->tierup_wait_lock);
+    module->fast_jit_ready_groups++;
+    os_mutex_unlock(&module->tierup_wait_lock);
+#endif
 #endif
 
 #if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
@@ -3183,11 +3214,13 @@ orcjit_thread_callback(void *arg)
         }
     }
 
-    /* Wait until init_llvm_jit_functions_stage2 finishes */
+    /* Wait until init_llvm_jit_functions_stage2 finishes and all
+       fast jit functions are compiled */
     os_mutex_lock(&module->tierup_wait_lock);
-    while (!module->llvm_jit_inited) {
+    while (!(module->llvm_jit_inited && module->enable_llvm_jit_compilation
+             && module->fast_jit_ready_groups >= group_stride)) {
         os_cond_reltimedwait(&module->tierup_wait_cond,
-                             &module->tierup_wait_lock, 10);
+                             &module->tierup_wait_lock, 10000);
         if (module->orcjit_stop_compiling) {
             /* init_llvm_jit_functions_stage2 failed */
             os_mutex_unlock(&module->tierup_wait_lock);
@@ -3838,8 +3871,8 @@ create_module(char *error_buf, uint32 error_buf_size)
     bh_assert(ret == BH_LIST_SUCCESS);
 #endif
 
-#if WASM_ENABLE_DEBUG_INTERP != 0                    \
-    || (WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT \
+#if WASM_ENABLE_DEBUG_INTERP != 0                         \
+    || (WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
         && WASM_ENABLE_LAZY_JIT != 0)
     if (os_mutex_init(&module->instance_list_lock) != 0) {
         set_error_buf(error_buf, error_buf_size,
@@ -4054,24 +4087,19 @@ fail:
     return false;
 }
 
-#if (WASM_ENABLE_MULTI_MODULE != 0) && (WASM_ENABLE_LIBC_WASI != 0)
+#if WASM_ENABLE_LIBC_WASI != 0
 /**
  * refer to
  * https://github.com/WebAssembly/WASI/blob/main/design/application-abi.md
  */
 static bool
-check_wasi_abi_compatibility(const WASMModule *module, bool main_module,
+check_wasi_abi_compatibility(const WASMModule *module,
+#if WASM_ENABLE_MULTI_MODULE != 0
+                             bool main_module,
+#endif
                              char *error_buf, uint32 error_buf_size)
 {
     /**
-     * need to handle:
-     * - non-wasi compatiable modules
-     * - a fake wasi compatiable module
-     * - a command acts as a main_module
-     * - a command acts as a sub_module
-     * - a reactor acts as a main_module
-     * - a reactor acts as a sub_module
-     *
      * be careful with:
      * wasi compatiable modules(command/reactor) which don't import any wasi
      * APIs. Usually, a command has to import a "prox_exit" at least, but a
@@ -4087,7 +4115,19 @@ check_wasi_abi_compatibility(const WASMModule *module, bool main_module,
      * - no one will define either `_start` or `_initialize` on purpose
      * - `_start` should always be `void _start(void)`
      * - `_initialize` should always be `void _initialize(void)`
+     *
      */
+
+    /* clang-format off */
+    /**
+     *
+     * |             | import_wasi_api True |                  | import_wasi_api False |                  |
+     * | ----------- | -------------------- | ---------------- | --------------------- | ---------------- |
+     * |             | \_initialize() Y     | \_initialize() N | \_initialize() Y      | \_initialize() N |
+     * | \_start() Y | N                    | COMMANDER        | N                     | COMMANDER        |
+     * | \_start() N | REACTOR              | N                | REACTOR               | OTHERS           |
+     */
+    /* clang-format on */
 
     WASMExport *initialize = NULL, *memory = NULL, *start = NULL;
 
@@ -4127,10 +4167,8 @@ check_wasi_abi_compatibility(const WASMModule *module, bool main_module,
 
     /* should have one at least */
     if (module->import_wasi_api && !start && !initialize) {
-        set_error_buf(
-            error_buf, error_buf_size,
-            "a module with WASI apis must be either a command or a reactor");
-        return false;
+        LOG_WARNING("warning: a module with WASI apis should be either "
+                    "a command or a reactor");
     }
 
     /*
@@ -4147,6 +4185,7 @@ check_wasi_abi_compatibility(const WASMModule *module, bool main_module,
         return false;
     }
 
+#if WASM_ENABLE_MULTI_MODULE != 0
     /* filter out commands (with `_start`) cases */
     if (start && !main_module) {
         set_error_buf(
@@ -4154,6 +4193,7 @@ check_wasi_abi_compatibility(const WASMModule *module, bool main_module,
             "a command (with _start function) can not be a sub-module");
         return false;
     }
+#endif
 
     /*
      * it is ok a reactor acts as a main module,
@@ -4162,7 +4202,20 @@ check_wasi_abi_compatibility(const WASMModule *module, bool main_module,
 
     memory = wasm_loader_find_export(module, "", "memory", EXPORT_KIND_MEMORY,
                                      error_buf, error_buf_size);
-    if (!memory) {
+    if (!memory
+#if WASM_ENABLE_LIB_WASI_THREADS != 0
+        /*
+         * with wasi-threads, it's still an open question if a memory
+         * should be exported.
+         *
+         * https://github.com/WebAssembly/wasi-threads/issues/22
+         * https://github.com/WebAssembly/WASI/issues/502
+         *
+         * Note: this code assumes the number of memories is at most 1.
+         */
+        && module->import_memory_count == 0
+#endif
+    ) {
         set_error_buf(error_buf, error_buf_size,
                       "a module with WASI apis must export memory by default");
         return false;
@@ -4193,10 +4246,13 @@ wasm_loader_load(uint8 *buf, uint32 size,
         goto fail;
     }
 
-#if (WASM_ENABLE_MULTI_MODULE != 0) && (WASM_ENABLE_LIBC_WASI != 0)
+#if WASM_ENABLE_LIBC_WASI != 0
     /* Check the WASI application ABI */
-    if (!check_wasi_abi_compatibility(module, main_module, error_buf,
-                                      error_buf_size)) {
+    if (!check_wasi_abi_compatibility(module,
+#if WASM_ENABLE_MULTI_MODULE != 0
+                                      main_module,
+#endif
+                                      error_buf, error_buf_size)) {
         goto fail;
     }
 #endif
@@ -4217,7 +4273,8 @@ wasm_loader_unload(WASMModule *module)
     if (!module)
         return;
 
-#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT && WASM_ENABLE_LAZY_JIT != 0
+#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
+    && WASM_ENABLE_LAZY_JIT != 0
     module->orcjit_stop_compiling = true;
     if (module->llvm_jit_init_thread)
         os_thread_join(module->llvm_jit_init_thread, NULL);
@@ -4238,7 +4295,8 @@ wasm_loader_unload(WASMModule *module)
         aot_destroy_comp_data(module->comp_data);
 #endif
 
-#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT && WASM_ENABLE_LAZY_JIT != 0
+#if WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
+    && WASM_ENABLE_LAZY_JIT != 0
     if (module->tierup_wait_lock_inited) {
         os_mutex_destroy(&module->tierup_wait_lock);
         os_cond_destroy(&module->tierup_wait_cond);
@@ -4273,9 +4331,9 @@ wasm_loader_unload(WASMModule *module)
                         module->functions[i]->fast_jit_jitted_code);
                 }
 #if WASM_ENABLE_JIT != 0 && WASM_ENABLE_LAZY_JIT != 0
-                if (module->functions[i]->llvm_jit_func_ptr) {
+                if (module->functions[i]->call_to_fast_jit_from_llvm_jit) {
                     jit_code_cache_free(
-                        module->functions[i]->llvm_jit_func_ptr);
+                        module->functions[i]->call_to_fast_jit_from_llvm_jit);
                 }
 #endif
 #endif
@@ -4367,8 +4425,8 @@ wasm_loader_unload(WASMModule *module)
     }
 #endif
 
-#if WASM_ENABLE_DEBUG_INTERP != 0                    \
-    || (WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT \
+#if WASM_ENABLE_DEBUG_INTERP != 0                         \
+    || (WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
         && WASM_ENABLE_LAZY_JIT != 0)
     os_mutex_destroy(&module->instance_list_lock);
 #endif
@@ -4971,6 +5029,7 @@ wasm_loader_find_block_addr(WASMExecEnv *exec_env, BlockAddr *block_addr_cache,
     }
 
     (void)u8;
+    (void)exec_env;
     return false;
 fail:
     return false;
@@ -5834,6 +5893,8 @@ preserve_referenced_local(WASMLoaderContext *loader_ctx, uint8 opcode,
             i += 2;
     }
 
+    (void)error_buf;
+    (void)error_buf_size;
     return true;
 #if WASM_ENABLE_LABELS_AS_VALUES != 0
 #if WASM_CPU_SUPPORTS_UNALIGNED_ADDR_ACCESS == 0
@@ -6098,6 +6159,9 @@ wasm_loader_pop_frame_offset(WASMLoaderContext *ctx, uint8 type,
             ctx->dynamic_offset -= 2;
     }
     emit_operand(ctx, *(ctx->frame_offset));
+
+    (void)error_buf;
+    (void)error_buf_size;
     return true;
 }
 
@@ -8158,12 +8222,13 @@ re_scan:
                     goto fail;
                 }
 
-                if (func_idx == cur_func_idx + module->import_function_count) {
+                /* Refer to a forward-declared function */
+                if (func_idx >= cur_func_idx + module->import_function_count) {
                     WASMTableSeg *table_seg = module->table_segments;
                     bool func_declared = false;
                     uint32 j;
 
-                    /* Check whether current function is declared */
+                    /* Check whether the function is declared in table segs */
                     for (i = 0; i < module->table_seg_count; i++, table_seg++) {
                         if (table_seg->elem_type == VALUE_TYPE_FUNCREF
                             && wasm_elem_is_declarative(table_seg->mode)) {
@@ -8175,6 +8240,17 @@ re_scan:
                             }
                         }
                     }
+                    if (!func_declared) {
+                        /* Check whether the function is exported */
+                        for (i = 0; i < module->export_count; i++) {
+                            if (module->exports[i].kind == EXPORT_KIND_FUNC
+                                && module->exports[i].index == func_idx) {
+                                func_declared = true;
+                                break;
+                            }
+                        }
+                    }
+
                     if (!func_declared) {
                         set_error_buf(error_buf, error_buf_size,
                                       "undeclared function reference");

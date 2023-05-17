@@ -11,9 +11,15 @@
 #include "../common/wasm_runtime_common.h"
 #include "../common/wasm_exec_env.h"
 
+#if WASM_ENABLE_WASI_NN != 0
+#include "../libraries/wasi-nn/src/wasi_nn_private.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define EXCEPTION_BUF_LEN 128
 
 typedef struct WASMModuleInstance WASMModuleInstance;
 typedef struct WASMFunctionInstance WASMFunctionInstance;
@@ -59,9 +65,7 @@ typedef enum WASMExceptionID {
     EXCE_AUX_STACK_UNDERFLOW,
     EXCE_OUT_OF_BOUNDS_TABLE_ACCESS,
     EXCE_OPERAND_STACK_OVERFLOW,
-#if WASM_ENABLE_FAST_JIT != 0
     EXCE_FAILED_TO_COMPILE_FAST_JIT_FUNC,
-#endif
     EXCE_ALREADY_THROWN,
     EXCE_NUM,
 } WASMExceptionID;
@@ -219,12 +223,7 @@ typedef struct WASMModuleInstanceExtra {
     WASMFunctionInstance *retain_function;
 
     CApiFuncImport *c_api_func_imports;
-
-#if WASM_ENABLE_SHARED_MEMORY != 0
-    /* lock for shared memory atomic operations */
-    korp_mutex mem_lock;
-    bool mem_lock_inited;
-#endif
+    RunningMode running_mode;
 
 #if WASM_ENABLE_MULTI_MODULE != 0
     bh_list sub_module_inst_list_head;
@@ -237,10 +236,14 @@ typedef struct WASMModuleInstanceExtra {
     uint32 max_aux_stack_used;
 #endif
 
-#if WASM_ENABLE_DEBUG_INTERP != 0                    \
-    || (WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT \
+#if WASM_ENABLE_DEBUG_INTERP != 0                         \
+    || (WASM_ENABLE_FAST_JIT != 0 && WASM_ENABLE_JIT != 0 \
         && WASM_ENABLE_LAZY_JIT != 0)
     WASMModuleInstance *next;
+#endif
+
+#if WASM_ENABLE_WASI_NN != 0
+    WASINNContext *wasi_nn_ctx;
 #endif
 } WASMModuleInstanceExtra;
 
@@ -281,7 +284,7 @@ struct WASMModuleInstance {
     DefPointer(WASMExportTabInstance *, export_tables);
 
     /* The exception buffer of wasm interpreter for current thread. */
-    char cur_exception[128];
+    char cur_exception[EXCEPTION_BUF_LEN];
 
     /* The WASM module or AOT module, for AOTModuleInstance,
        it denotes `AOTModule *` */
@@ -298,7 +301,11 @@ struct WASMModuleInstance {
        not available in AOTModuleInstance */
     DefPointer(void **, import_func_ptrs);
     /* Array of function pointers to fast jit functions,
-       not available in AOTModuleInstance */
+       not available in AOTModuleInstance:
+       Only when the multi-tier JIT macros are all enabled and the running
+       mode of current module instance is set to Mode_Fast_JIT, runtime
+       will allocate new memory for it, otherwise it always points to the
+       module->fast_jit_func_ptrs */
     DefPointer(void **, fast_jit_func_ptrs);
     /* The custom data that can be set/get by wasm_{get|set}_custom_data */
     DefPointer(void *, custom_data);
@@ -393,7 +400,8 @@ void
 wasm_unload(WASMModule *module);
 
 WASMModuleInstance *
-wasm_instantiate(WASMModule *module, bool is_sub_inst, uint32 stack_size,
+wasm_instantiate(WASMModule *module, bool is_sub_inst,
+                 WASMExecEnv *exec_env_main, uint32 stack_size,
                  uint32 heap_size, char *error_buf, uint32 error_buf_size);
 
 void
@@ -401,6 +409,10 @@ wasm_dump_perf_profiling(const WASMModuleInstance *module_inst);
 
 void
 wasm_deinstantiate(WASMModuleInstance *module_inst, bool is_sub_inst);
+
+bool
+wasm_set_running_mode(WASMModuleInstance *module_inst,
+                      RunningMode running_mode);
 
 WASMFunctionInstance *
 wasm_lookup_function(const WASMModuleInstance *module_inst, const char *name,
@@ -421,11 +433,6 @@ bool
 wasm_call_function(WASMExecEnv *exec_env, WASMFunctionInstance *function,
                    unsigned argc, uint32 argv[]);
 
-bool
-wasm_create_exec_env_and_call_function(WASMModuleInstance *module_inst,
-                                       WASMFunctionInstance *function,
-                                       unsigned argc, uint32 argv[]);
-
 void
 wasm_set_exception(WASMModuleInstance *module, const char *exception);
 
@@ -434,6 +441,29 @@ wasm_set_exception_with_id(WASMModuleInstance *module_inst, uint32 id);
 
 const char *
 wasm_get_exception(WASMModuleInstance *module);
+
+/**
+ * @brief Copy exception in buffer passed as parameter. Thread-safe version of
+ * `wasm_get_exception()`
+ * @note Buffer size must be no smaller than EXCEPTION_BUF_LEN
+ * @return true if exception found
+ */
+bool
+wasm_copy_exception(WASMModuleInstance *module_inst, char *exception_buf);
+
+uint32
+wasm_module_malloc_internal(WASMModuleInstance *module_inst,
+                            WASMExecEnv *exec_env, uint32 size,
+                            void **p_native_addr);
+
+uint32
+wasm_module_realloc_internal(WASMModuleInstance *module_inst,
+                             WASMExecEnv *exec_env, uint32 ptr, uint32 size,
+                             void **p_native_addr);
+
+void
+wasm_module_free_internal(WASMModuleInstance *module_inst,
+                          WASMExecEnv *exec_env, uint32 ptr);
 
 uint32
 wasm_module_malloc(WASMModuleInstance *module_inst, uint32 size,
@@ -625,6 +655,11 @@ void
 llvm_jit_free_frame(WASMExecEnv *exec_env);
 #endif
 #endif /* end of WASM_ENABLE_JIT != 0 || WASM_ENABLE_WAMR_COMPILER != 0 */
+
+#if WASM_ENABLE_LIBC_WASI != 0 && WASM_ENABLE_MULTI_MODULE != 0
+void
+wasm_propagate_wasi_args(WASMModule *module);
+#endif
 
 #ifdef __cplusplus
 }

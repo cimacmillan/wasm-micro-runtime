@@ -12,12 +12,13 @@ import {
     downloadFile,
     unzipFile,
 } from './directoryUtilities';
+import { SelectionOfPrompt } from '../constants';
 
 const LLDB_RESOURCE_DIR = 'resource/debug';
 const LLDB_OS_DOWNLOAD_URL_SUFFIX_MAP: Partial<
     Record<NodeJS.Platform, string>
 > = {
-    linux: 'x86_64-ubuntu-22.04',
+    linux: 'x86_64-ubuntu-20.04',
     darwin: 'universal-macos-latest',
 };
 
@@ -27,7 +28,7 @@ const WAMR_LLDB_NOT_SUPPORTED_ERROR = new Error(
 
 function getLLDBUnzipFilePath(destinationFolder: string, filename: string) {
     const dirs = filename.split('/');
-    if (dirs[0] === 'inst') {
+    if (dirs[0] === 'wamr-lldb') {
         dirs.shift();
     }
 
@@ -37,6 +38,7 @@ function getLLDBUnzipFilePath(destinationFolder: string, filename: string) {
 export function getWAMRExtensionVersion(
     context: vscode.ExtensionContext
 ): string {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require(path.join(context.extensionPath, 'package.json')).version;
 }
 
@@ -64,18 +66,19 @@ export function isLLDBInstalled(context: vscode.ExtensionContext): boolean {
     return checkIfFileExists(lldbBinaryPath);
 }
 
-export async function promptInstallLLDB(context: vscode.ExtensionContext) {
+export async function promptInstallLLDB(
+    context: vscode.ExtensionContext
+): Promise<SelectionOfPrompt> {
     const extensionPath = context.extensionPath;
-    const setupPrompt = 'setup';
-    const skipPrompt = 'skip';
+
     const response = await vscode.window.showWarningMessage(
         'No LLDB instance found. Setup now?',
-        setupPrompt,
-        skipPrompt
+        SelectionOfPrompt.setUp,
+        SelectionOfPrompt.skip
     );
 
-    if (response === skipPrompt) {
-        return;
+    if (response === SelectionOfPrompt.skip) {
+        return response;
     }
 
     const downloadUrl = getLLDBDownloadUrl(context);
@@ -111,5 +114,6 @@ export async function promptInstallLLDB(context: vscode.ExtensionContext) {
     );
 
     // Remove the bundle.zip
-    fs.unlink(lldbZipPath, () => {});
+    fs.unlinkSync(lldbZipPath);
+    return SelectionOfPrompt.setUp;
 }

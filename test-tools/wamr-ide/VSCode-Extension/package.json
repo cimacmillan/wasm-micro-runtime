@@ -1,12 +1,12 @@
 {
     "name": "wamride",
-    "publisher": "wamr",
+    "publisher": "wamr-ide",
     "repository": {
         "url": "https://github.com/bytecodealliance/wasm-micro-runtime/tree/main/test-tools/wamr-ide"
     },
     "displayName": "WAMR-IDE",
     "description": "An Integrated Development Environment for WASM",
-    "version": "1.0.0",
+    "version": "1.2.1",
     "engines": {
         "vscode": "^1.59.0"
     },
@@ -229,6 +229,7 @@
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
+        "lint-fix": "eslint --fix src --ext ts",
         "test": "node ./out/test/runTest.js",
         "prettier-format-check": "prettier --config .prettierrc.json 'src/**/*.ts' --check",
         "prettier-format-apply": "prettier --config .prettierrc.json 'src/**/*.ts' --write"

@@ -11,6 +11,10 @@
 #include "../interpreter/wasm_runtime.h"
 #include "../compilation/aot.h"
 
+#if WASM_ENABLE_WASI_NN != 0
+#include "../libraries/wasi-nn/src/wasi_nn_private.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -75,6 +79,9 @@ typedef struct AOTFunctionInstance {
 
 typedef struct AOTModuleInstanceExtra {
     CApiFuncImport *c_api_func_imports;
+#if WASM_ENABLE_WASI_NN != 0
+    WASINNContext *wasi_nn_ctx;
+#endif
 } AOTModuleInstanceExtra;
 
 #if defined(OS_ENABLE_HW_BOUND_CHECK) && defined(BH_PLATFORM_WINDOWS)
@@ -336,8 +343,9 @@ aot_unload(AOTModule *module);
  * @return return the instantiated AOT module instance, NULL if failed
  */
 AOTModuleInstance *
-aot_instantiate(AOTModule *module, bool is_sub_inst, uint32 stack_size,
-                uint32 heap_size, char *error_buf, uint32 error_buf_size);
+aot_instantiate(AOTModule *module, bool is_sub_inst, WASMExecEnv *exec_env_main,
+                uint32 stack_size, uint32 heap_size, char *error_buf,
+                uint32 error_buf_size);
 
 /**
  * Deinstantiate a AOT module instance, destroy the resources.
@@ -380,11 +388,6 @@ bool
 aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
                   unsigned argc, uint32 argv[]);
 
-bool
-aot_create_exec_env_and_call_function(AOTModuleInstance *module_inst,
-                                      AOTFunctionInstance *function,
-                                      unsigned argc, uint32 argv[]);
-
 /**
  * Set AOT module instance exception with exception string
  *
@@ -407,6 +410,27 @@ aot_set_exception_with_id(AOTModuleInstance *module_inst, uint32 id);
  */
 const char *
 aot_get_exception(AOTModuleInstance *module_inst);
+
+/**
+ * @brief Copy exception in buffer passed as parameter. Thread-safe version of
+ * `aot_get_exception()`
+ * @note Buffer size must be no smaller than EXCEPTION_BUF_LEN
+ * @return true if exception found, false otherwise
+ */
+bool
+aot_copy_exception(AOTModuleInstance *module_inst, char *exception_buf);
+
+uint32
+aot_module_malloc_internal(AOTModuleInstance *module_inst, WASMExecEnv *env,
+                           uint32 size, void **p_native_addr);
+
+uint32
+aot_module_realloc_internal(AOTModuleInstance *module_inst, WASMExecEnv *env,
+                            uint32 ptr, uint32 size, void **p_native_addr);
+
+void
+aot_module_free_internal(AOTModuleInstance *module_inst, WASMExecEnv *env,
+                         uint32 ptr);
 
 uint32
 aot_module_malloc(AOTModuleInstance *module_inst, uint32 size,
